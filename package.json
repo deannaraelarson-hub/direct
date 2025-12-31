@@ -1,0 +1,10 @@
+{
+  "name": "wallet-scanner",
+  "version": "1.0.0",
+  "description": "Multi-chain wallet scanner",
+  "scripts": {
+    "start": "npx http-server -p 3000",
+    "dev": "npx http-server -p 3000"
+  },
+  "dependencies": {}
+}

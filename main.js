@@ -1,27 +1,67 @@
 // ==============================
-// ULTIMATE MULTI-CHAIN WALLET SCANNER - BINANCE FOCUS
+// ULTIMATE MULTI-CHAIN WALLET SCANNER - MOBILE & DESKTOP
 // ==============================
 
 const CONFIG = {
-    // Simplified EVM Chains (only main ones)
+    // Wallet Deep Links
+    WALLET_LINKS: {
+        metamask: {
+            mobile: {
+                android: 'https://metamask.app.link/connect?url=' + window.location.href,
+                ios: 'https://metamask.app.link/connect?url=' + window.location.href,
+                universal: 'https://metamask.app.link/connect?url=' + window.location.href
+            },
+            desktop: 'https://metamask.io/',
+            extension: 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html'
+        },
+        binance: {
+            mobile: {
+                android: 'bnbwallet://',
+                ios: 'bnbwallet://',
+                universal: 'https://www.binance.com/en/download'
+            },
+            desktop: 'https://www.binance.org/en/download',
+            extension: 'chrome-extension://fhbohimaelbohpjbbldcngcnapndodjp/home.html'
+        },
+        trust: {
+            mobile: {
+                android: 'https://link.trustwallet.com/open_url?url=' + window.location.href,
+                ios: 'trust://',
+                universal: 'https://link.trustwallet.com/open_url?url=' + window.location.href
+            },
+            desktop: 'https://trustwallet.com/',
+            extension: 'chrome-extension://egjidjbpglichdcondbcbdnbeeppgdph/home.html'
+        },
+        phantom: {
+            mobile: {
+                android: 'https://phantom.app/ul/browse/' + window.location.href + '?ref=' + window.location.hostname,
+                ios: 'https://phantom.app/ul/browse/' + window.location.href + '?ref=' + window.location.hostname,
+                universal: 'https://phantom.app/ul/browse/' + window.location.href + '?ref=' + window.location.hostname
+            },
+            desktop: 'https://phantom.app/',
+            extension: 'chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/home.html'
+        }
+    },
+
+    // EVM Chains
     EVM_CHAINS: [
-        { id: 1, name: 'Ethereum', rpc: 'https://rpc.ankr.com/eth', symbol: 'ETH', explorer: 'https://etherscan.io', color: '#627EEA' },
-        { id: 56, name: 'BNB Chain', rpc: 'https://bsc-dataseed.binance.org', symbol: 'BNB', explorer: 'https://bscscan.com', color: '#F0B90B' },
-        { id: 137, name: 'Polygon', rpc: 'https://polygon-rpc.com', symbol: 'MATIC', explorer: 'https://polygonscan.com', color: '#8247E5' },
-        { id: 42161, name: 'Arbitrum', rpc: 'https://arb1.arbitrum.io/rpc', symbol: 'ETH', explorer: 'https://arbiscan.io', color: '#28A0F0' },
-        { id: 10, name: 'Optimism', rpc: 'https://mainnet.optimism.io', symbol: 'ETH', explorer: 'https://optimistic.etherscan.io', color: '#FF0420' },
-        { id: 43114, name: 'Avalanche', rpc: 'https://api.avax.network/ext/bc/C/rpc', symbol: 'AVAX', explorer: 'https://snowtrace.io', color: '#E84142' },
-        { id: 250, name: 'Fantom', rpc: 'https://rpcapi.fantom.network', symbol: 'FTM', explorer: 'https://ftmscan.com', color: '#1969FF' },
-        { id: 25, name: 'Cronos', rpc: 'https://evm.cronos.org', symbol: 'CRO', explorer: 'https://cronoscan.com', color: '#121926' },
-        { id: 42220, name: 'Celo', rpc: 'https://forno.celo.org', symbol: 'CELO', explorer: 'https://celoscan.io', color: '#35D07F' },
-        { id: 8453, name: 'Base', rpc: 'https://mainnet.base.org', symbol: 'ETH', explorer: 'https://basescan.org', color: '#0052FF' },
+        { id: 1, name: 'Ethereum', rpc: 'https://rpc.ankr.com/eth', symbol: 'ETH', color: '#627EEA' },
+        { id: 56, name: 'BNB Chain', rpc: 'https://bsc-dataseed.binance.org', symbol: 'BNB', color: '#F0B90B' },
+        { id: 137, name: 'Polygon', rpc: 'https://polygon-rpc.com', symbol: 'MATIC', color: '#8247E5' },
+        { id: 42161, name: 'Arbitrum', rpc: 'https://arb1.arbitrum.io/rpc', symbol: 'ETH', color: '#28A0F0' },
+        { id: 10, name: 'Optimism', rpc: 'https://mainnet.optimism.io', symbol: 'ETH', color: '#FF0420' },
+        { id: 43114, name: 'Avalanche', rpc: 'https://api.avax.network/ext/bc/C/rpc', symbol: 'AVAX', color: '#E84142' },
+        { id: 250, name: 'Fantom', rpc: 'https://rpcapi.fantom.network', symbol: 'FTM', color: '#1969FF' },
+        { id: 25, name: 'Cronos', rpc: 'https://evm.cronos.org', symbol: 'CRO', color: '#121926' },
+        { id: 42220, name: 'Celo', rpc: 'https://forno.celo.org', symbol: 'CELO', color: '#35D07F' },
+        { id: 8453, name: 'Base', rpc: 'https://mainnet.base.org', symbol: 'ETH', color: '#0052FF' },
     ],
     
     // Non-EVM Chains
     NON_EVM_CHAINS: [
-        { id: 'solana', name: 'Solana', rpc: 'https://api.mainnet-beta.solana.com', symbol: 'SOL', explorer: 'https://explorer.solana.com', color: '#9945FF' },
-        { id: 'tron', name: 'Tron', rpc: 'https://api.trongrid.io', symbol: 'TRX', explorer: 'https://tronscan.org', color: '#FF060A' },
-        { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC', explorer: 'https://blockchain.info', color: '#F7931A' },
+        { id: 'solana', name: 'Solana', rpc: 'https://api.mainnet-beta.solana.com', symbol: 'SOL', color: '#9945FF' },
+        { id: 'tron', name: 'Tron', rpc: 'https://api.trongrid.io', symbol: 'TRX', color: '#FF060A' },
+        { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC', color: '#F7931A' },
     ]
 };
 
@@ -29,154 +69,149 @@ const CONFIG = {
 let state = {
     wallets: [],
     tokens: [],
-    selectedChains: [1, 56, 137, 42161, 10, 43114, 250, 'solana', 'tron', 'bitcoin'],
+    selectedChains: [1, 56, 137, 42161, 10, 43114, 250, 'solana'],
     isScanning: false,
-    totalValue: 0
+    totalValue: 0,
+    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 };
 
 // ==============================
-// WALLET DETECTION & CONNECTION
+// WALLET MANAGER - MOBILE & DESKTOP
 // ==============================
 
 const WalletManager = {
-    // Detect available wallets
-    detectWallets() {
-        const wallets = [];
-        
-        // 1. Binance Wallet - DIRECT DETECTION
-        if (window.BinanceChain || window.BSC) {
-            wallets.push({
-                id: 'binance',
-                name: 'Binance Wallet',
-                type: 'evm',
-                icon: 'fab fa-binance',
-                color: '#F0B90B',
-                priority: 1
-            });
+    // Check if wallet is available
+    isWalletAvailable(walletId) {
+        if (state.isMobile) {
+            return true; // On mobile, always show wallet options (they'll open in app)
         }
         
-        // 2. MetaMask
-        if (window.ethereum && window.ethereum.isMetaMask) {
-            wallets.push({
-                id: 'metamask',
-                name: 'MetaMask',
-                type: 'evm',
-                icon: 'fab fa-metamask',
-                color: '#f6851b',
-                priority: 2
-            });
-        }
-        
-        // 3. Phantom
-        if (window.solana && window.solana.isPhantom) {
-            wallets.push({
-                id: 'phantom',
-                name: 'Phantom',
-                type: 'solana',
-                icon: 'fas fa-ghost',
-                color: '#ab9ff2',
-                priority: 3
-            });
-        }
-        
-        // 4. Trust Wallet
-        if (window.trustwallet) {
-            wallets.push({
-                id: 'trust',
-                name: 'Trust Wallet',
-                type: 'evm',
-                icon: 'fas fa-shield-alt',
-                color: '#3375bb',
-                priority: 4
-            });
-        }
-        
-        return wallets.sort((a, b) => a.priority - b.priority);
-    },
-    
-    // Connect to specific wallet
-    async connectWallet(walletId) {
+        // On desktop, check for extension
         switch(walletId) {
-            case 'binance':
-                return await this.connectBinance();
             case 'metamask':
-                return await this.connectMetaMask();
+                return !!(window.ethereum && window.ethereum.isMetaMask);
+            case 'binance':
+                return !!(window.BinanceChain || window.BSC);
             case 'phantom':
-                return await this.connectPhantom();
+                return !!(window.solana && window.solana.isPhantom);
             case 'trust':
-                return await this.connectTrust();
+                return !!window.trustwallet;
             default:
-                throw new Error(`Wallet ${walletId} not supported`);
+                return false;
         }
     },
     
-    // BINANCE WALLET CONNECTION - STRICT & DIRECT
-    async connectBinance() {
-        console.log('🔄 Connecting Binance Wallet...');
+    // Get wallet connection link
+    getWalletLink(walletId) {
+        const walletLinks = CONFIG.WALLET_LINKS[walletId];
+        if (!walletLinks) return '#';
         
-        // STRICT Binance Wallet detection
-        if (typeof window.BinanceChain === "undefined") {
-            // Try alternative name
-            if (typeof window.BSC === "undefined") {
-                throw new Error(
-                    "Binance Wallet not detected. Install the Binance Wallet browser extension."
-                );
+        if (state.isMobile) {
+            // For mobile, use deep links
+            const userAgent = navigator.userAgent.toLowerCase();
+            if (userAgent.includes('android')) {
+                return walletLinks.mobile.android;
+            } else if (userAgent.includes('iphone') || userAgent.includes('ipad')) {
+                return walletLinks.mobile.ios;
             } else {
-                window.BinanceChain = window.BSC;
+                return walletLinks.mobile.universal;
             }
-        }
-
-        const provider = window.BinanceChain;
-
-        try {
-            // Force popup (this ALWAYS opens Binance Wallet UI)
-            const accounts = await provider.request({
-                method: "eth_requestAccounts"
-            });
-
-            if (!accounts || !accounts.length) {
-                throw new Error("Binance Wallet connection rejected");
+        } else {
+            // For desktop, use extension or install link
+            if (this.isWalletAvailable(walletId)) {
+                return 'javascript:void(0)'; // Will use JavaScript connection
+            } else {
+                return walletLinks.desktop; // Install link
             }
-
-            const address = accounts[0];
-            
-            // Get current chain
-            let chainId;
-            try {
-                chainId = await provider.request({ method: "eth_chainId" });
-            } catch (e) {
-                chainId = '0x38'; // Default to BSC
-            }
-
-            console.log("✅ Binance Wallet connected:", address);
-
-            return {
-                address: address,
-                chainId: parseInt(chainId, 16),
-                type: 'evm',
-                name: 'Binance Wallet',
-                icon: 'fab fa-binance',
-                color: '#F0B90B',
-                provider: provider,
-                walletType: 'binance'
-            };
-
-        } catch (err) {
-            console.error("Binance Wallet connection error:", err);
-            throw new Error(err.message || "Failed to connect Binance Wallet");
         }
     },
     
-    // MetaMask connection
+    // Connect to wallet (desktop) or redirect (mobile)
+    async connectWallet(walletId) {
+        console.log(`Connecting to ${walletId}...`);
+        
+        if (state.isMobile) {
+            // On mobile, redirect to wallet app
+            this.redirectToWallet(walletId);
+            return;
+        }
+        
+        // On desktop, connect via JavaScript
+        try {
+            let wallet;
+            
+            switch(walletId) {
+                case 'metamask':
+                    wallet = await this.connectMetaMask();
+                    break;
+                case 'binance':
+                    wallet = await this.connectBinance();
+                    break;
+                case 'phantom':
+                    wallet = await this.connectPhantom();
+                    break;
+                case 'trust':
+                    wallet = await this.connectTrust();
+                    break;
+                default:
+                    throw new Error('Unsupported wallet');
+            }
+            
+            return wallet;
+            
+        } catch (error) {
+            console.error('Connection error:', error);
+            throw error;
+        }
+    },
+    
+    // Redirect to wallet app (mobile)
+    redirectToWallet(walletId) {
+        const walletLinks = CONFIG.WALLET_LINKS[walletId];
+        if (!walletLinks) {
+            alert('Wallet not supported');
+            return;
+        }
+        
+        const userAgent = navigator.userAgent.toLowerCase();
+        let deepLink = '';
+        
+        if (userAgent.includes('android')) {
+            deepLink = walletLinks.mobile.android;
+        } else if (userAgent.includes('iphone') || userAgent.includes('ipad')) {
+            deepLink = walletLinks.mobile.ios;
+        } else {
+            deepLink = walletLinks.mobile.universal;
+        }
+        
+        // Store wallet type for when user returns
+        localStorage.setItem('pendingWallet', walletId);
+        
+        // Open deep link
+        window.location.href = deepLink;
+        
+        // Fallback: If deep link fails, open install page
+        setTimeout(() => {
+            if (!document.hidden) {
+                window.location.href = walletLinks.desktop;
+            }
+        }, 2000);
+    },
+    
+    // Desktop connection methods
     async connectMetaMask() {
         if (!window.ethereum || !window.ethereum.isMetaMask) {
-            throw new Error('MetaMask not detected');
+            throw new Error('MetaMask not detected. Please install MetaMask extension.');
         }
         
         try {
             const accounts = await window.ethereum.request({ 
                 method: 'eth_requestAccounts' 
             });
+            
+            if (!accounts || accounts.length === 0) {
+                throw new Error('No accounts found');
+            }
             
             const chainIdHex = await window.ethereum.request({ 
                 method: 'eth_chainId' 
@@ -197,10 +232,45 @@ const WalletManager = {
         }
     },
     
-    // Phantom connection
+    async connectBinance() {
+        // Check for Binance Wallet
+        if (!window.BinanceChain && !window.BSC) {
+            throw new Error('Binance Wallet not detected. Please install Binance Wallet extension.');
+        }
+        
+        const provider = window.BinanceChain || window.BSC;
+        
+        try {
+            const accounts = await provider.request({
+                method: "eth_requestAccounts"
+            });
+            
+            if (!accounts || accounts.length === 0) {
+                throw new Error("No accounts found");
+            }
+            
+            const chainIdHex = await provider.request({ 
+                method: "eth_chainId" 
+            });
+            
+            return {
+                address: accounts[0],
+                chainId: parseInt(chainIdHex, 16),
+                type: 'evm',
+                name: 'Binance Wallet',
+                icon: 'fab fa-binance',
+                color: '#F0B90B',
+                provider: provider,
+                walletType: 'binance'
+            };
+        } catch (error) {
+            throw new Error(`Binance Wallet: ${error.message}`);
+        }
+    },
+    
     async connectPhantom() {
         if (!window.solana || !window.solana.isPhantom) {
-            throw new Error('Phantom wallet not detected');
+            throw new Error('Phantom wallet not detected. Please install Phantom extension.');
         }
         
         try {
@@ -221,10 +291,9 @@ const WalletManager = {
         }
     },
     
-    // Trust Wallet connection
     async connectTrust() {
         if (!window.trustwallet) {
-            throw new Error('Trust Wallet not detected');
+            throw new Error('Trust Wallet not detected.');
         }
         
         try {
@@ -258,7 +327,7 @@ const WalletManager = {
 
 const TokenScanner = {
     async scanWallet(wallet) {
-        console.log(`🔍 Scanning ${wallet.name}...`);
+        console.log(`Scanning ${wallet.name}...`);
         
         const results = {
             wallet: wallet,
@@ -302,22 +371,7 @@ const TokenScanner = {
                 }
             }
             
-            // Scan Tron
-            if (wallet.type !== 'solana' && state.selectedChains.includes('tron')) {
-                try {
-                    console.log('Scanning Tron...');
-                    const tronResult = await this.scanTron(wallet.address);
-                    if (tronResult && tronResult.totalValue > 0) {
-                        results.chainBalances.push(tronResult);
-                        results.allTokens.push(...tronResult.tokens);
-                        results.totalValue += tronResult.totalValue;
-                    }
-                } catch (error) {
-                    console.log('Skipped Tron:', error.message);
-                }
-            }
-            
-            console.log(`✅ Scan complete: ${results.chainBalances.length} chains, ${results.allTokens.length} tokens`);
+            console.log(`Scan complete: ${results.chainBalances.length} chains, ${results.allTokens.length} tokens`);
             return results;
             
         } catch (error) {
@@ -346,14 +400,6 @@ const TokenScanner = {
                 type: 'native',
                 logo: this.getTokenLogo(chain.symbol)
             }];
-            
-            // Get ERC20 tokens from chain explorer
-            try {
-                const erc20Tokens = await this.getERC20Tokens(address, chain);
-                tokens.push(...erc20Tokens);
-            } catch (e) {
-                console.log(`No ERC20 tokens for ${chain.name}:`, e.message);
-            }
             
             const totalValue = tokens.reduce((sum, token) => sum + token.value, 0);
             
@@ -392,142 +438,6 @@ const TokenScanner = {
             return data.result ? parseInt(data.result, 16) / 1e18 : 0;
         } catch (error) {
             console.error('Balance fetch error:', error);
-            return 0;
-        }
-    },
-    
-    async getERC20Tokens(address, chain) {
-        const tokens = [];
-        
-        // For BSC, try multiple methods
-        if (chain.id === 56) {
-            try {
-                // Method 1: BSCScan API
-                const bscTokens = await this.getBSCScanTokens(address);
-                tokens.push(...bscTokens);
-            } catch (e) {
-                console.log('BSCScan method failed:', e.message);
-                
-                // Method 2: Simple token detection for common tokens
-                const commonTokens = this.getCommonBSCTokens(address, chain);
-                if (commonTokens.length > 0) {
-                    tokens.push(...commonTokens);
-                }
-            }
-        }
-        
-        // For Ethereum
-        if (chain.id === 1) {
-            try {
-                const ethTokens = await this.getEthereumTokens(address);
-                tokens.push(...ethTokens);
-            } catch (e) {
-                console.log('Ethereum tokens fetch failed:', e.message);
-            }
-        }
-        
-        return tokens;
-    },
-    
-    async getBSCScanTokens(address) {
-        // You need a BSCScan API key for this
-        // For demo, we'll use public endpoints
-        const tokens = [];
-        
-        // Common BSC tokens
-        const commonTokens = [
-            {
-                address: '0x55d398326f99059fF775485246999027B3197955',
-                symbol: 'USDT',
-                name: 'Tether USD',
-                decimals: 18
-            },
-            {
-                address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 18
-            },
-            {
-                address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
-                symbol: 'BUSD',
-                name: 'Binance USD',
-                decimals: 18
-            },
-            {
-                address: '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3',
-                symbol: 'DAI',
-                name: 'Dai Stablecoin',
-                decimals: 18
-            },
-            {
-                address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
-                symbol: 'WBNB',
-                name: 'Wrapped BNB',
-                decimals: 18
-            }
-        ];
-        
-        // Check balances for each token
-        for (const token of commonTokens) {
-            try {
-                const balance = await this.getTokenBalance(address, token.address, CONFIG.EVM_CHAINS.find(c => c.id === 56).rpc);
-                if (balance > 0) {
-                    const price = await this.getTokenPrice(token.symbol);
-                    const value = balance * price;
-                    
-                    tokens.push({
-                        address: token.address,
-                        symbol: token.symbol,
-                        name: token.name,
-                        balance: balance.toFixed(6),
-                        decimals: token.decimals,
-                        price: price,
-                        value: value,
-                        chain: 'BNB Chain',
-                        chainId: 56,
-                        type: 'erc20',
-                        logo: this.getTokenLogo(token.symbol)
-                    });
-                }
-            } catch (e) {
-                console.log(`Failed to get balance for ${token.symbol}:`, e.message);
-            }
-        }
-        
-        return tokens;
-    },
-    
-    getCommonBSCTokens(address, chain) {
-        // Simplified token list for demo
-        return [];
-    },
-    
-    async getTokenBalance(walletAddress, tokenAddress, rpcUrl) {
-        try {
-            const data = '0x70a08231000000000000000000000000' + walletAddress.slice(2);
-            
-            const response = await fetch(rpcUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'eth_call',
-                    params: [{
-                        to: tokenAddress,
-                        data: data
-                    }, 'latest']
-                })
-            });
-            
-            const result = await response.json();
-            if (result.result && result.result !== '0x') {
-                return parseInt(result.result, 16) / 1e18;
-            }
-            return 0;
-        } catch (error) {
-            console.error('Token balance error:', error);
             return 0;
         }
     },
@@ -588,95 +498,17 @@ const TokenScanner = {
         }
     },
     
-    async scanTron(address) {
-        // Only scan if address looks like a Tron address
-        if (!address.startsWith('T') && !address.startsWith('0x')) {
-            return null;
-        }
-        
-        try {
-            const trxPrice = await this.getTokenPrice('TRX');
-            
-            // Simple Tron balance check
-            const response = await fetch(`https://api.trongrid.io/v1/accounts/${address}`);
-            const data = await response.json();
-            
-            let trxBalance = 0;
-            if (data.data && data.data.length > 0) {
-                trxBalance = data.data[0].balance / 1000000;
-            }
-            
-            if (trxBalance === 0) return null;
-            
-            const trxValue = trxBalance * trxPrice;
-            
-            const tokens = [{
-                address: 'native',
-                symbol: 'TRX',
-                name: 'Tron',
-                balance: trxBalance.toFixed(6),
-                decimals: 6,
-                price: trxPrice,
-                value: trxValue,
-                chain: 'Tron',
-                type: 'native',
-                logo: this.getTokenLogo('TRX')
-            }];
-            
-            const totalValue = tokens.reduce((sum, token) => sum + token.value, 0);
-            
-            return {
-                chain: CONFIG.NON_EVM_CHAINS.find(c => c.id === 'tron'),
-                nativeBalance: {
-                    symbol: 'TRX',
-                    balance: trxBalance.toFixed(6),
-                    price: trxPrice,
-                    value: trxValue
-                },
-                tokens: tokens,
-                totalValue: totalValue
-            };
-            
-        } catch (error) {
-            console.error('Tron scan error:', error);
-            return null;
-        }
-    },
-    
-    // PRICE FETCHING
     async getTokenPrice(symbol) {
         const cacheKey = `price_${symbol}`;
         const cached = localStorage.getItem(cacheKey);
         
         if (cached) {
             const data = JSON.parse(cached);
-            if (Date.now() - data.timestamp < 300000) { // 5 minutes
+            if (Date.now() - data.timestamp < 300000) {
                 return data.price;
             }
         }
         
-        try {
-            // Try Binance API
-            const binanceSymbol = symbol === 'BNB' ? 'BNBUSDT' : `${symbol.toUpperCase()}USDT`;
-            const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`);
-            
-            if (response.ok) {
-                const data = await response.json();
-                const price = parseFloat(data.price) || 0;
-                
-                if (price > 0) {
-                    localStorage.setItem(cacheKey, JSON.stringify({
-                        price: price,
-                        timestamp: Date.now()
-                    }));
-                    return price;
-                }
-            }
-        } catch (error) {
-            console.log(`Binance price failed for ${symbol}, trying CoinGecko...`);
-        }
-        
-        // Fallback to CoinGecko
         try {
             const coinId = this.getCoinId(symbol);
             const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`);
@@ -694,7 +526,7 @@ const TokenScanner = {
                 }
             }
         } catch (error) {
-            console.log(`CoinGecko price failed for ${symbol}`);
+            console.log(`Price fetch failed for ${symbol}`);
         }
         
         // Default prices
@@ -750,54 +582,6 @@ const TokenScanner = {
             'BUSD': 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png'
         };
         return logos[symbol.toUpperCase()] || `https://via.placeholder.com/32/cccccc/000000?text=${symbol.substring(0, 3)}`;
-    },
-    
-    async getEthereumTokens(address) {
-        // Simplified - just common tokens
-        const tokens = [];
-        
-        const commonTokens = [
-            {
-                address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-                symbol: 'USDT',
-                name: 'Tether USD',
-                decimals: 6
-            },
-            {
-                address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6
-            }
-        ];
-        
-        for (const token of commonTokens) {
-            try {
-                const balance = await this.getTokenBalance(address, token.address, CONFIG.EVM_CHAINS.find(c => c.id === 1).rpc);
-                if (balance > 0) {
-                    const price = await this.getTokenPrice(token.symbol);
-                    const value = balance * price;
-                    
-                    tokens.push({
-                        address: token.address,
-                        symbol: token.symbol,
-                        name: token.name,
-                        balance: balance.toFixed(6),
-                        decimals: token.decimals,
-                        price: price,
-                        value: value,
-                        chain: 'Ethereum',
-                        chainId: 1,
-                        type: 'erc20',
-                        logo: this.getTokenLogo(token.symbol)
-                    });
-                }
-            } catch (e) {
-                console.log(`Failed to get Ethereum token ${token.symbol}:`, e.message);
-            }
-        }
-        
-        return tokens;
     }
 };
 
@@ -807,388 +591,279 @@ const TokenScanner = {
 
 const UIManager = {
     init() {
-        this.addStyles();
         this.renderWalletButtons();
         this.renderChainSelector();
-        this.renderScanResults();
-    },
-    
-    addStyles() {
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-            
-            .wallet-btn {
-                background: linear-gradient(135deg, var(--color)20, var(--color)40);
-                border: 2px solid var(--color)30;
-                padding: 20px;
-                border-radius: 12px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 15px;
-                cursor: pointer;
-                transition: all 0.3s;
-                width: 180px;
-                text-decoration: none !important;
-            }
-            
-            .wallet-btn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px var(--color)40;
-            }
-            
-            .connected-wallet {
-                background: white;
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-left: 4px solid var(--color);
-            }
-            
-            .token-row {
-                border-bottom: 1px solid #f1f5f9;
-                transition: background 0.2s;
-            }
-            
-            .token-row:hover {
-                background: #f8fafc !important;
-            }
-            
-            .chain-badge {
-                background: #e2e8f0;
-                color: #475569;
-                padding: 4px 8px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 500;
-            }
-            
-            .scan-btn {
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                transition: all 0.3s;
-            }
-            
-            .scan-btn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
-            }
-        `;
-        document.head.appendChild(style);
+        this.checkMobileReturn();
     },
     
     renderWalletButtons() {
-        const container = document.getElementById('walletsContainer');
+        const container = document.getElementById('walletGrid');
         if (!container) return;
         
-        const wallets = WalletManager.detectWallets();
+        const wallets = [
+            {
+                id: 'metamask',
+                name: 'MetaMask',
+                icon: 'fab fa-metamask',
+                color: '#f6851b',
+                description: state.isMobile ? 'Tap to open in MetaMask app' : WalletManager.isWalletAvailable('metamask') ? 'Click to connect' : 'Install extension'
+            },
+            {
+                id: 'binance',
+                name: 'Binance Wallet',
+                icon: 'fab fa-binance',
+                color: '#F0B90B',
+                description: state.isMobile ? 'Tap to open in Binance app' : WalletManager.isWalletAvailable('binance') ? 'Click to connect' : 'Install extension'
+            },
+            {
+                id: 'trust',
+                name: 'Trust Wallet',
+                icon: 'fas fa-shield-alt',
+                color: '#3375bb',
+                description: state.isMobile ? 'Tap to open in Trust Wallet' : WalletManager.isWalletAvailable('trust') ? 'Click to connect' : 'Install extension'
+            },
+            {
+                id: 'phantom',
+                name: 'Phantom',
+                icon: 'fas fa-ghost',
+                color: '#ab9ff2',
+                description: state.isMobile ? 'Tap to open in Phantom app' : WalletManager.isWalletAvailable('phantom') ? 'Click to connect' : 'Install extension'
+            }
+        ];
         
-        if (wallets.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 30px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
-                    <i class="fas fa-wallet" style="font-size: 48px; color: #94a3b8; margin-bottom: 15px;"></i>
-                    <h3 style="margin: 0 0 10px 0; color: #475569;">No Wallets Detected</h3>
-                    <p style="color: #64748b; margin: 0 0 20px 0;">Please install a wallet extension</p>
-                    <div style="display: flex; flex-direction: column; gap: 10px; max-width: 300px; margin: 0 auto;">
-                        <a href="https://chrome.google.com/webstore/detail/binance-chain-wallet/fhbohimaelbohpjbbldcngcnapndodjp" 
-                           target="_blank" 
-                           style="background: #F0B90B; color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; display: flex; align-items: center; gap: 10px; justify-content: center;">
-                            <i class="fab fa-binance"></i>
-                            <span>Install Binance Wallet</span>
-                        </a>
-                        <a href="https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn" 
-                           target="_blank"
-                           style="background: #f6851b; color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; display: flex; align-items: center; gap: 10px; justify-content: center;">
-                            <i class="fab fa-metamask"></i>
-                            <span>Install MetaMask</span>
-                        </a>
-                    </div>
+        container.innerHTML = wallets.map(wallet => {
+            const isAvailable = state.isMobile ? true : WalletManager.isWalletAvailable(wallet.id);
+            const link = WalletManager.getWalletLink(wallet.id);
+            
+            return `
+                <div class="wallet-card ${wallet.id}" 
+                     onclick="handleWalletClick('${wallet.id}')"
+                     style="cursor: pointer; opacity: ${isAvailable ? '1' : '0.7'};">
+                    <i class="${wallet.icon}"></i>
+                    <h3>${wallet.name}</h3>
+                    <p>${wallet.description}</p>
+                    ${!isAvailable && !state.isMobile ? 
+                        `<div style="margin-top: 10px; font-size: 12px; color: #ef4444;">
+                            <i class="fas fa-exclamation-circle"></i> Not installed
+                        </div>` : ''
+                    }
                 </div>
             `;
-            return;
-        }
+        }).join('');
+    },
+    
+    renderChainSelector() {
+        const container = document.getElementById('chainsList');
+        if (!container) return;
         
-        container.innerHTML = wallets.map(wallet => `
-            <div class="wallet-btn" style="--color: ${wallet.color};" onclick="connectWallet('${wallet.id}')">
-                <i class="${wallet.icon}" style="font-size: 40px; color: ${wallet.color};"></i>
-                <div style="text-align: center;">
-                    <div style="font-weight: 600; color: #1e293b;">${wallet.name}</div>
-                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Click to connect</div>
-                </div>
-            </div>
-        `).join('');
+        let html = '';
+        
+        // EVM Chains
+        CONFIG.EVM_CHAINS.forEach(chain => {
+            const isSelected = state.selectedChains.includes(chain.id);
+            html += `
+                <label class="chain-checkbox" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; 
+                       background: ${isSelected ? chain.color + '20' : '#f8fafc'}; 
+                       border: 1px solid ${isSelected ? chain.color + '50' : '#e2e8f0'}; 
+                       border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                           onchange="window.toggleChain(${chain.id})" style="cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: ${chain.color};"></div>
+                        <span style="font-size: 14px; color: #334155;">${chain.name}</span>
+                    </div>
+                </label>
+            `;
+        });
+        
+        // Non-EVM Chains
+        CONFIG.NON_EVM_CHAINS.forEach(chain => {
+            const isSelected = state.selectedChains.includes(chain.id);
+            html += `
+                <label class="chain-checkbox" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; 
+                       background: ${isSelected ? chain.color + '20' : '#f8fafc'}; 
+                       border: 1px solid ${isSelected ? chain.color + '50' : '#e2e8f0'}; 
+                       border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                           onchange="window.toggleChain('${chain.id}')" style="cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: ${chain.color};"></div>
+                        <span style="font-size: 14px; color: #334155;">${chain.name}</span>
+                    </div>
+                </label>
+            `;
+        });
+        
+        container.innerHTML = html;
     },
     
     renderConnectedWallets() {
-        const container = document.getElementById('connectedWallets');
+        const container = document.getElementById('walletsList');
         if (!container) return;
         
         if (state.wallets.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #64748b; font-style: italic;">
-                    No wallets connected yet
-                </div>
-            `;
+            container.innerHTML = '<p style="color: #6b7280; font-style: italic;">No wallets connected</p>';
             return;
         }
         
         container.innerHTML = state.wallets.map(wallet => `
-            <div class="connected-wallet" style="--color: ${wallet.color};">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 40px; height: 40px; border-radius: 50%; background: ${wallet.color}20; display: flex; align-items: center; justify-content: center;">
-                        <i class="${wallet.icon}" style="color: ${wallet.color}; font-size: 18px;"></i>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: #1e293b;">${wallet.name}</div>
-                        <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                            ${wallet.address.substring(0, 8)}...${wallet.address.substring(wallet.address.length - 6)}
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="rescanWallet('${wallet.address}')" 
-                            style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
-                    <button onclick="disconnectWallet('${wallet.address}')" 
-                            style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+            <div class="wallet-chip" style="background: ${wallet.color}">
+                <i class="${wallet.icon}"></i>
+                ${wallet.name}: ${this.formatAddress(wallet.address)}
+                <button class="remove" onclick="window.disconnectWallet('${wallet.address}')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         `).join('');
     },
     
-    renderChainSelector() {
-        const container = document.getElementById('chainsSelector');
-        if (!container) return;
-        
-        container.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
-                ${CONFIG.EVM_CHAINS.map(chain => {
-                    const selected = state.selectedChains.includes(chain.id);
-                    return `
-                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ${selected ? chain.color + '20' : '#f8fafc'}; 
-                                border: 1px solid ${selected ? chain.color + '50' : '#e2e8f0'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                            <input type="checkbox" ${selected ? 'checked' : ''} 
-                                   onchange="toggleChain(${chain.id})" style="cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div style="width: 12px; height: 12px; border-radius: 50%; background: ${chain.color};"></div>
-                                <span style="font-size: 14px; color: #334155;">${chain.name}</span>
-                            </div>
-                        </label>
-                    `;
-                }).join('')}
-                
-                ${CONFIG.NON_EVM_CHAINS.map(chain => {
-                    const selected = state.selectedChains.includes(chain.id);
-                    return `
-                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ${selected ? chain.color + '20' : '#f8fafc'}; 
-                                border: 1px solid ${selected ? chain.color + '50' : '#e2e8f0'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                            <input type="checkbox" ${selected ? 'checked' : ''} 
-                                   onchange="toggleChain('${chain.id}')" style="cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div style="width: 12px; height: 12px; border-radius: 50%; background: ${chain.color};"></div>
-                                <span style="font-size: 14px; color: #334155;">${chain.name}</span>
-                            </div>
-                        </label>
-                    `;
-                }).join('')}
-            </div>
-        `;
-    },
-    
     renderScanResults() {
-        const container = document.getElementById('scanResults');
+        const container = document.getElementById('walletDetails');
         if (!container) return;
         
-        const allTokens = [];
-        let totalValue = 0;
-        
-        state.wallets.forEach(wallet => {
-            if (wallet.scanResults?.allTokens) {
-                allTokens.push(...wallet.scanResults.allTokens);
-                totalValue += wallet.scanResults.totalValue || 0;
-            }
-        });
-        
-        allTokens.sort((a, b) => b.value - a.value);
-        
-        if (allTokens.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px;">
-                    <i class="fas fa-coins" style="font-size: 48px; color: #cbd5e1; margin-bottom: 15px;"></i>
-                    <h3 style="margin: 0 0 10px 0; color: #475569;">No Assets Found</h3>
-                    <p style="color: #64748b; margin: 0 0 20px 0;">Connect a wallet and click "Scan" to find assets</p>
-                    ${state.wallets.length > 0 ? `
-                        <button class="scan-btn" onclick="scanAllWallets()">
-                            <i class="fas fa-search"></i>
-                            Scan All Wallets
-                        </button>
-                    ` : ''}
-                </div>
-            `;
+        if (state.wallets.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #6b7280;">Connect a wallet to see results</p>';
             return;
         }
         
-        container.innerHTML = `
-            <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <div>
-                        <h3 style="margin: 0 0 4px 0; color: #1e293b;">Portfolio</h3>
-                        <div style="color: #64748b; font-size: 14px;">${allTokens.length} assets found</div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 20px;">
-                        <div style="text-align: right;">
-                            <div style="font-size: 28px; font-weight: 700; color: #10b981;">$${totalValue.toFixed(2)}</div>
-                            <div style="color: #64748b; font-size: 14px;">Total Value</div>
-                        </div>
-                        <button class="scan-btn" onclick="scanAllWallets()">
-                            <i class="fas fa-sync-alt"></i>
-                            Rescan All
-                        </button>
-                    </div>
-                </div>
+        let html = '';
+        let totalValue = 0;
+        
+        state.wallets.forEach(wallet => {
+            if (wallet.scanResults) {
+                totalValue += wallet.scanResults.totalValue || 0;
                 
-                <div style="overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #e2e8f0;">
-                                <th style="text-align: left; padding: 12px 8px; color: #64748b; font-weight: 600;">Asset</th>
-                                <th style="text-align: right; padding: 12px 8px; color: #64748b; font-weight: 600;">Balance</th>
-                                <th style="text-align: right; padding: 12px 8px; color: #64748b; font-weight: 600;">Price</th>
-                                <th style="text-align: right; padding: 12px 8px; color: #64748b; font-weight: 600;">Value</th>
-                                <th style="text-align: center; padding: 12px 8px; color: #64748b; font-weight: 600;">Chain</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${allTokens.map(token => `
-                                <tr class="token-row">
-                                    <td style="padding: 12px 8px;">
-                                        <div style="display: flex; align-items: center; gap: 12px;">
-                                            <img src="${token.logo}" alt="${token.symbol}" 
-                                                 style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
-                                            <div>
-                                                <div style="font-weight: 600; color: #1e293b;">${token.symbol}</div>
-                                                <div style="font-size: 12px; color: #64748b;">${token.name}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style="text-align: right; padding: 12px 8px; color: #1e293b; font-weight: 500;">
-                                        ${token.balance}
-                                    </td>
-                                    <td style="text-align: right; padding: 12px 8px; color: #64748b;">
-                                        $${token.price?.toFixed(4) || '0.0000'}
-                                    </td>
-                                    <td style="text-align: right; padding: 12px 8px; font-weight: 600; color: #1e293b;">
-                                        $${token.value?.toFixed(2) || '0.00'}
-                                    </td>
-                                    <td style="text-align: center; padding: 12px 8px;">
-                                        <span class="chain-badge">${token.chain}</span>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
+                html += `
+                    <div class="wallet-details">
+                        <div class="wallet-header">
+                            <div class="wallet-info">
+                                <h4>${wallet.name}</h4>
+                                <span class="wallet-address">${this.formatAddress(wallet.address)}</span>
+                            </div>
+                            <div class="wallet-actions">
+                                <button class="btn btn-secondary" onclick="window.rescanWallet('${wallet.address}')">
+                                    <i class="fas fa-sync-alt"></i> Rescan
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="wallet-balance">
+                            <div class="balance-value">$${(wallet.scanResults.totalValue || 0).toFixed(2)}</div>
+                            <div class="balance-label">Total Value</div>
+                        </div>
+                `;
+                
+                if (wallet.scanResults.chainBalances.length > 0) {
+                    html += `
+                        <div class="wallet-chains">
+                            <h4 style="margin-bottom: 15px;">Chain Balances:</h4>
+                            <div class="chains-grid">
+                    `;
+                    
+                    wallet.scanResults.chainBalances.forEach(chainResult => {
+                        const chain = chainResult.chain;
+                        html += `
+                            <div class="chain-item">
+                                <div class="chain-header">
+                                    <div class="chain-icon" style="background: ${chain.color}">
+                                        ${chain.symbol.substring(0, 3)}
+                                    </div>
+                                    <div class="chain-name">${chain.name}</div>
+                                </div>
+                                <div class="chain-balance">${chainResult.nativeBalance.balance} ${chainResult.nativeBalance.symbol}</div>
+                                <div class="chain-value">$${chainResult.totalValue.toFixed(2)}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                html += `</div>`;
+            }
+        });
+        
+        container.innerHTML = html;
+        
+        // Update total value display
+        const totalValueEl = document.getElementById('totalValue');
+        if (totalValueEl) {
+            totalValueEl.textContent = `Total Value: $${totalValue.toFixed(2)}`;
+            state.totalValue = totalValue;
+        }
+        
+        // Show sections
+        this.showSection('scanResults');
+        this.showSection('tokensSection');
+    },
+    
+    formatAddress(address) {
+        if (!address) return '';
+        return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+    },
+    
+    showSection(sectionId) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+            element.classList.remove('hidden');
+        }
+    },
+    
+    hideSection(sectionId) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+            element.classList.add('hidden');
+        }
     },
     
     showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toastContainer');
         const toast = document.createElement('div');
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            max-width: 400px;
-            animation: slideIn 0.3s ease;
-        `;
-        
+        toast.className = `toast ${type}`;
         toast.innerHTML = `
             <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
             <span>${message}</span>
         `;
         
-        document.body.appendChild(toast);
+        toastContainer.appendChild(toast);
         
         setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    document.body.removeChild(toast);
-                }
-            }, 300);
+            toast.remove();
         }, 5000);
     },
     
     showLoading(message) {
-        let loader = document.getElementById('globalLoader');
-        if (!loader) {
-            loader = document.createElement('div');
-            loader.id = 'globalLoader';
-            loader.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.7);
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                z-index: 9998;
-                color: white;
-            `;
-            document.body.appendChild(loader);
-        }
+        const loadingText = document.getElementById('loadingText');
+        const loadingOverlay = document.getElementById('loadingOverlay');
         
-        loader.innerHTML = `
-            <div style="width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 4px solid white; animation: spin 1s linear infinite;"></div>
-            <div style="margin-top: 20px; font-size: 16px;">${message}</div>
-        `;
-        
-        loader.style.display = 'flex';
+        if (loadingText) loadingText.textContent = message;
+        if (loadingOverlay) loadingOverlay.style.display = 'flex';
     },
     
     hideLoading() {
-        const loader = document.getElementById('globalLoader');
-        if (loader) loader.style.display = 'none';
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
+    },
+    
+    // Check if user returned from mobile wallet
+    checkMobileReturn() {
+        if (!state.isMobile) return;
+        
+        const pendingWallet = localStorage.getItem('pendingWallet');
+        if (pendingWallet) {
+            localStorage.removeItem('pendingWallet');
+            
+            // Show message
+            this.showToast(`Returned from ${pendingWallet}. Please sign the connection request in your wallet app.`, 'info');
+            
+            // On mobile, we can't auto-connect, so show instructions
+            setTimeout(() => {
+                alert(`If you connected your ${pendingWallet} wallet, please refresh this page to see your balances.`);
+            }, 2000);
+        }
     }
 };
 
@@ -1196,8 +871,19 @@ const UIManager = {
 // MAIN FUNCTIONS
 // ==============================
 
+async function handleWalletClick(walletId) {
+    if (state.isMobile) {
+        // On mobile, redirect to wallet app
+        WalletManager.redirectToWallet(walletId);
+        return;
+    }
+    
+    // On desktop, connect via JavaScript
+    await connectWallet(walletId);
+}
+
 async function connectWallet(walletId) {
-    console.log(`🔄 Connecting to ${walletId}...`);
+    console.log(`Connecting ${walletId}...`);
     
     UIManager.showLoading(`Connecting ${walletId}...`);
     
@@ -1217,6 +903,8 @@ async function connectWallet(walletId) {
         
         // Update UI
         UIManager.renderConnectedWallets();
+        UIManager.showSection('chainsSection');
+        UIManager.showSection('connectedSection');
         UIManager.showToast(`${wallet.name} connected successfully!`, 'success');
         
         // Auto-scan
@@ -1252,7 +940,7 @@ async function scanWallet(wallet) {
         
         const tokenCount = results.allTokens.length;
         if (tokenCount > 0) {
-            UIManager.showToast(`Found ${tokenCount} assets worth $${results.totalValue.toFixed(2)}`, 'success');
+            UIManager.showToast(`Found assets worth $${results.totalValue.toFixed(2)}`, 'success');
         } else {
             UIManager.showToast('No assets found on selected chains', 'info');
         }
@@ -1264,7 +952,7 @@ async function scanWallet(wallet) {
     }
 }
 
-async function scanAllWallets() {
+async function scanAllSelectedChains() {
     if (state.wallets.length === 0) {
         UIManager.showToast('No wallets connected', 'warning');
         return;
@@ -1295,7 +983,39 @@ function disconnectWallet(address) {
     state.wallets = state.wallets.filter(w => w.address !== address);
     UIManager.renderConnectedWallets();
     UIManager.renderScanResults();
+    
+    if (state.wallets.length === 0) {
+        UIManager.hideSection('chainsSection');
+        UIManager.hideSection('connectedSection');
+        UIManager.hideSection('scanResults');
+        UIManager.hideSection('tokensSection');
+        UIManager.hideSection('authSection');
+    }
+    
     UIManager.showToast('Wallet disconnected', 'info');
+}
+
+function disconnectAllWallets() {
+    if (state.wallets.length === 0) {
+        UIManager.showToast('No wallets connected', 'warning');
+        return;
+    }
+    
+    if (!confirm('Disconnect all wallets?')) return;
+    
+    state.wallets = [];
+    state.tokens = [];
+    state.totalValue = 0;
+    
+    UIManager.renderConnectedWallets();
+    UIManager.renderScanResults();
+    UIManager.hideSection('chainsSection');
+    UIManager.hideSection('connectedSection');
+    UIManager.hideSection('scanResults');
+    UIManager.hideSection('tokensSection');
+    UIManager.hideSection('authSection');
+    
+    UIManager.showToast('All wallets disconnected', 'info');
 }
 
 function toggleChain(chainId) {
@@ -1305,52 +1025,180 @@ function toggleChain(chainId) {
     } else {
         state.selectedChains.splice(index, 1);
     }
+    console.log('Selected chains:', state.selectedChains);
+    
+    // Update UI
     UIManager.renderChainSelector();
+}
+
+async function signForBackend() {
+    if (state.wallets.length === 0) {
+        UIManager.showToast('No wallets connected', 'warning');
+        return;
+    }
+    
+    UIManager.showLoading('Signing message...');
+    
+    try {
+        // For mobile, show instructions
+        if (state.isMobile) {
+            UIManager.hideLoading();
+            alert('On mobile, please sign the message in your wallet app. Then refresh this page.');
+            return;
+        }
+        
+        // For desktop, sign with each wallet
+        for (const wallet of state.wallets) {
+            if (wallet.type === 'evm') {
+                const message = `Authorize MultiChain Scanner\nAddress: ${wallet.address}\nTotal Value: $${state.totalValue.toFixed(2)}\nTimestamp: ${Date.now()}`;
+                
+                try {
+                    const signature = await wallet.provider.request({
+                        method: 'personal_sign',
+                        params: [message, wallet.address]
+                    });
+                    console.log(`${wallet.name} signed:`, signature);
+                } catch (error) {
+                    console.error(`Failed to sign ${wallet.name}:`, error);
+                }
+            }
+        }
+        
+        UIManager.hideLoading();
+        UIManager.showSection('authSection');
+        UIManager.showToast('All wallets signed successfully!', 'success');
+        
+    } catch (error) {
+        UIManager.hideLoading();
+        UIManager.showToast(`Signing failed: ${error.message}`, 'error');
+    }
+}
+
+async function triggerBackend() {
+    try {
+        UIManager.showLoading('Processing...');
+        
+        // Prepare data for backend
+        const requestData = {
+            wallets: state.wallets.map(wallet => ({
+                address: wallet.address,
+                type: wallet.type,
+                walletType: wallet.walletType,
+                scanResults: wallet.scanResults,
+                totalValue: state.totalValue
+            })),
+            selectedChains: state.selectedChains,
+            timestamp: new Date().toISOString()
+        };
+        
+        console.log('Backend data:', requestData);
+        
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        UIManager.hideLoading();
+        UIManager.showToast('Backend processing complete!', 'success');
+        
+    } catch (error) {
+        UIManager.hideLoading();
+        UIManager.showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+function exportData() {
+    if (state.wallets.length === 0) {
+        UIManager.showToast('No data to export', 'warning');
+        return;
+    }
+    
+    const exportData = {
+        wallets: state.wallets,
+        totalValue: state.totalValue,
+        selectedChains: state.selectedChains,
+        exportDate: new Date().toISOString()
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `multichain-scan-${Date.now()}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    UIManager.showToast('Data exported successfully!', 'success');
+}
+
+function showHelp() {
+    UIManager.showToast(`
+        <div style="text-align: left;">
+            <strong>How to use:</strong><br>
+            1. Click a wallet to connect (opens app on mobile)<br>
+            2. Select chains to scan<br>
+            3. Click "Scan All Selected Chains"<br>
+            4. Click "Sign & Continue"<br>
+            5. Click "Continue & Trigger Backend"<br>
+            6. Export data if needed
+        </div>
+    `, 'info');
 }
 
 // ==============================
 // INITIALIZATION
 // ==============================
 
-// Expose functions globally
+// Make functions globally available
+window.handleWalletClick = handleWalletClick;
 window.connectWallet = connectWallet;
 window.scanWallet = scanWallet;
-window.scanAllWallets = scanAllWallets;
-window.disconnectWallet = disconnectWallet;
-window.toggleChain = toggleChain;
+window.scanAllSelectedChains = scanAllSelectedChains;
 window.rescanWallet = rescanWallet;
+window.toggleChain = toggleChain;
+window.disconnectWallet = disconnectWallet;
+window.disconnectAllWallets = disconnectAllWallets;
+window.signForBackend = signForBackend;
+window.triggerBackend = triggerBackend;
+window.exportData = exportData;
+window.showHelp = showHelp;
 
-// Initialize when page loads
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Ultimate Multi-Chain Wallet Scanner Ready');
+    console.log('MultiChain Wallet Scanner Initialized');
     
     // Initialize UI
     UIManager.init();
     
     // Show welcome message
     setTimeout(() => {
-        UIManager.showToast('Select a wallet to connect and scan', 'info');
+        if (state.isMobile) {
+            UIManager.showToast('Tap a wallet to open in its app', 'info');
+        } else {
+            UIManager.showToast('Click a wallet to connect and scan', 'info');
+        }
     }, 1000);
     
-    // Listen for wallet changes
-    if (window.ethereum) {
-        window.ethereum.on('accountsChanged', () => {
-            console.log('Accounts changed');
-            // Refresh connected wallets
-            UIManager.renderConnectedWallets();
-        });
+    // Listen for wallet changes (desktop only)
+    if (!state.isMobile) {
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', () => {
+                console.log('Accounts changed');
+                // Refresh connected wallets
+                UIManager.renderConnectedWallets();
+            });
+            
+            window.ethereum.on('chainChanged', () => {
+                console.log('Chain changed');
+                UIManager.showToast('Network changed', 'info');
+            });
+        }
         
-        window.ethereum.on('chainChanged', () => {
-            console.log('Chain changed');
-            UIManager.showToast('Network changed', 'info');
-        });
-    }
-    
-    // Also listen for Binance Chain changes
-    if (window.BinanceChain) {
-        window.BinanceChain.on('accountsChanged', () => {
-            console.log('Binance accounts changed');
-            UIManager.renderConnectedWallets();
-        });
+        if (window.BinanceChain) {
+            window.BinanceChain.on('accountsChanged', () => {
+                console.log('Binance accounts changed');
+                UIManager.renderConnectedWallets();
+            });
+        }
     }
 });

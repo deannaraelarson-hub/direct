@@ -1,4 +1,3 @@
-// vite.config.js
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -10,6 +9,16 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: false,
+    emptyOutDir: true
+  },
+  define: {
+    'process.env': {},
+    'global': {}
+  },
+  resolve: {
+    alias: {
+      buffer: 'buffer/'
+    }
   }
 })

@@ -9,15 +9,17 @@
     "dev": "live-server . --port=3000"
   },
   "dependencies": {
-    "connectkit": "^1.7.0",
-    "wagmi": "^2.12.0",
-    "viem": "^2.21.0",
+    "@tanstack/react-query": "^5.90.16",
     "@wagmi/core": "^2.12.0",
-    "@tanstack/react-query": "^5.53.2",
-    "ethers": "^5.7.0"
+    "connectkit": "^1.9.1",
+    "ethers": "^5.8.0",
+    "viem": "^2.43.4",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
-    "live-server": "^1.2.2"
+    "@vitejs/plugin-react": "^5.1.2",
+    "live-server": "^1.2.2",
+    "vite": "^7.3.0"
   },
   "keywords": [
     "wallet",
@@ -27,5 +29,13 @@
   ],
   "author": "",
   "license": "MIT",
-  "type": "module"
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deannaraelarson-hub/direct.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deannaraelarson-hub/direct/issues"
+  },
+  "homepage": "https://github.com/deannaraelarson-hub/direct#readme"
 }

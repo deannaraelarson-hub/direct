@@ -1,10 +1,31 @@
 {
-  "name": "wallet-scanner",
+  "name": "connectkit-wallet-scanner",
   "version": "1.0.0",
-  "description": "Multi-chain wallet scanner",
+  "description": "Modern wallet connection with ConnectKit + token scanning",
+  "main": "main.js",
   "scripts": {
-    "start": "npx http-server -p 3000",
-    "dev": "npx http-server -p 3000"
+    "start": "live-server .",
+    "build": "echo 'No build step required for vanilla JS'",
+    "dev": "live-server . --port=3000"
   },
-  "dependencies": {}
+  "dependencies": {
+    "connectkit": "^1.7.0",
+    "wagmi": "^2.12.0",
+    "viem": "^2.21.0",
+    "@wagmi/core": "^2.12.0",
+    "@tanstack/react-query": "^5.53.2",
+    "ethers": "^5.7.0"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  },
+  "keywords": [
+    "wallet",
+    "connectkit",
+    "ethereum",
+    "multichain"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module"
 }

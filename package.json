@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.16",
-    "buffer": "^6.0.3",
     "connectkit": "^1.9.1",
     "ethers": "^5.8.0",
     "react": "^18.3.1",
@@ -19,6 +18,20 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
+    "buffer": "^6.0.3",
     "vite": "^5.4.21"
-  }
+  },
+  "description": "",
+  "main": "vite.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deannaraelarson-hub/direct.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/deannaraelarson-hub/direct/issues"
+  },
+  "homepage": "https://github.com/deannaraelarson-hub/direct#readme"
 }

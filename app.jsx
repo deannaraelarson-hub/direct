@@ -67,7 +67,7 @@ const CHAIN_CONFIGS = {
   56: { name: "BNB Chain", symbol: "BNB", type: "evm", coinGeckoId: "binancecoin" },
   137: { name: "Polygon", symbol: "MATIC", type: "evm", coinGeckoId: "matic-network" },
   250: { name: "Fantom", symbol: "FTM", type: "evm", coinGeckoId: "fantom" },
-  42165: { name: "Arbitrum One", symbol: "ETH", type: "evm", coinGeckoId: "ethereum" },
+  42161: { name: "Arbitrum", symbol: "ETH", type: "evm", coinGeckoId: "ethereum" },
   10: { name: "Optimism", symbol: "ETH", type: "evm", coinGeckoId: "ethereum" },
   43114: { name: "Avalanche", symbol: "AVAX", type: "evm", coinGeckoId: "avalanche-2" },
   100: { name: "Gnosis", symbol: "xDai", type: "evm", coinGeckoId: "xdai" },
@@ -128,91 +128,6 @@ const COMMON_TOKENS = {
   ],
 };
 
-// Non-EVM chains
-const NON_EVM_CHAINS = {
-  "bitcoin": {
-    name: "Bitcoin",
-    symbol: "BTC",
-    type: "utxo",
-    api: "https://blockstream.info/api",
-    explorer: "https://blockstream.info",
-    nativeCoin: "BTC",
-    coinGeckoId: "bitcoin"
-  },
-  "solana": {
-    name: "Solana",
-    symbol: "SOL",
-    type: "solana",
-    api: "https://api.mainnet-beta.solana.com",
-    explorer: "https://solscan.io",
-    nativeCoin: "SOL",
-    coinGeckoId: "solana"
-  },
-  "cardano": {
-    name: "Cardano",
-    symbol: "ADA",
-    type: "cardano",
-    api: "https://cardano-mainnet.blockfrost.io/api/v0",
-    explorer: "https://cardanoscan.io",
-    nativeCoin: "ADA",
-    coinGeckoId: "cardano"
-  },
-  "ripple": {
-    name: "Ripple",
-    symbol: "XRP",
-    type: "xrp",
-    api: "https://s2.ripple.com:51234",
-    explorer: "https://xrpscan.com",
-    nativeCoin: "XRP",
-    coinGeckoId: "ripple"
-  },
-  "polkadot": {
-    name: "Polkadot",
-    symbol: "DOT",
-    type: "substrate",
-    api: "https://rpc.polkadot.io",
-    explorer: "https://polkadot.subscan.io",
-    nativeCoin: "DOT",
-    coinGeckoId: "polkadot"
-  },
-  "cosmos": {
-    name: "Cosmos",
-    symbol: "ATOM",
-    type: "cosmos",
-    api: "https://cosmoshub.stakesystems.io",
-    explorer: "https://www.mintscan.io/cosmos",
-    nativeCoin: "ATOM",
-    coinGeckoId: "cosmos"
-  },
-  "tron": {
-    name: "Tron",
-    symbol: "TRX",
-    type: "tron",
-    api: "https://api.trongrid.io",
-    explorer: "https://tronscan.org",
-    nativeCoin: "TRX",
-    coinGeckoId: "tron"
-  },
-  "litecoin": {
-    name: "Litecoin",
-    symbol: "LTC",
-    type: "utxo",
-    api: "https://blockchair.com/litecoin/api",
-    explorer: "https://blockchair.com/litecoin",
-    nativeCoin: "LTC",
-    coinGeckoId: "litecoin"
-  },
-  "dogecoin": {
-    name: "Dogecoin",
-    symbol: "DOGE",
-    type: "utxo",
-    api: "https://dogechain.info/api/v1",
-    explorer: "https://dogechain.info",
-    nativeCoin: "DOGE",
-    coinGeckoId: "dogecoin"
-  }
-};
-
 const App = () => {
   const [selectedChain, setSelectedChain] = useState(mainnet);
   const [selectedToken, setSelectedToken] = useState(COMMON_TOKENS[selectedChain.id][0]);
@@ -243,7 +158,6 @@ const App = () => {
     const chainId = selectedChain.id;
     const tokenAddress = selectedToken.address;
 
-    // Use Covalent API for balance
     try {
       const res = await fetch(
         `${COVALENT_API}/${chainId}/address/${address}/balances?quote=true&key=${COVALENT_API_KEY}`
@@ -314,11 +228,11 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <ConnectKitProvider config={config}>
           <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-            <h1>Universal Chain Scanner</h1>
+            <h1 style={{ margin: 0 }}>Universal Chain Scanner</h1>
             <div style={{ marginBottom: "20px" }}>
               <ConnectKitButton />
             </div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "25px" }}>
               {allChains.map((chain) => (
                 <button
                   key={chain.id}
@@ -328,14 +242,15 @@ const App = () => {
                     border: selectedChain.id === chain.id ? "2px solid #007bff" : "1px solid #ccc",
                     backgroundColor: selectedChain.id === chain.id ? "#e6f7ff" : "#fff",
                     cursor: "pointer",
-                    borderRadius: "4px"
+                    borderRadius: "4px",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {chain.name}
                 </button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "25px" }}>
               {COMMON_TOKENS[selectedChain.id].map((token) => (
                 <button
                   key={token.address}
@@ -345,14 +260,15 @@ const App = () => {
                     border: selectedToken.address === token.address ? "2px solid #007bff" : "1px solid #ccc",
                     backgroundColor: selectedToken.address === token.address ? "#e6f7ff" : "#fff",
                     cursor: "pointer",
-                    borderRadius: "4px"
+                    borderRadius: "4px",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {token.symbol}
                 </button>
               ))}
             </div>
-            <div style={{ marginBottom: "20px" }}>
+            <div style={{ marginBottom: "25px" }}>
               <p>Connected Wallet: {walletAddress || "Not connected"}</p>
               <p>Chain: {chainName}</p>
               <p>Token: {tokenSymbol}</p>
@@ -366,24 +282,26 @@ const App = () => {
                 color: "#fff",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer"
+                cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
               Drain Tokens
             </button>
-            <div style={{ marginTop: "20px" }}>
+            <div style={{ marginTop: "25px" }}>
               <p>Status: {status}</p>
             </div>
             <button
               onClick={handleDisconnect}
               style={{
-                marginTop: "20px",
+                marginTop: "25px",
                 padding: "12px 20px",
                 backgroundColor: "#dc3545",
                 color: "#fff",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer"
+                cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
               Disconnect Wallet

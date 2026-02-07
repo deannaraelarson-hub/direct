@@ -5,15 +5,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'wallet-vendor': ['wagmi', 'viem', 'connectkit']
-        }
-      }
-    }
+    sourcemap: false
   },
   server: {
     port: 3000

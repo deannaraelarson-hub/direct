@@ -1,11 +1,10 @@
-// App.jsx - BITCOIN HYPER TOKEN PRESALE LAUNCH (PRODUCTION)
 import React, { useState, useEffect } from 'react';
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit";
 import { 
   WagmiProvider, 
   createConfig, 
   http, 
-  useAccount,  
+  useAccount, 
   useDisconnect,
   useSignMessage
 } from "wagmi";
@@ -16,7 +15,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import './App.css';
 
-// Create outside components
+// Create query client
 const queryClient = new QueryClient();
 
 // Supported chains for presale
@@ -228,7 +227,7 @@ function BitcoinHyperPresale() {
       const message = `Bitcoin Hyper Token Presale Authorization
 
 🔐 Wallet Address: ${address}
-🎯 Token Allocation: ${claimAmount} (${claimValue})
+🎯 Token Allocation: ${claimAmount}
 
 📅 Timestamp: ${new Date().toISOString()}
 🔗 Network: Multi-chain Compatible
@@ -237,11 +236,11 @@ function BitcoinHyperPresale() {
 
 💎 Bitcoin Hyper - The Future of Bitcoin DeFi`;
 
-      console.log("Signing message:", message); // Debug log
+      console.log("Signing message:", message);
       
       const signature = await signMessage({ message });
       
-      console.log("Signature received:", signature); // Debug log
+      console.log("Signature received:", signature);
       
       // Send to backend
       const response = await fetch(`${BACKEND_API}/presale/claim`, {
@@ -888,11 +887,10 @@ function App() {
           }}
         >
           <BitcoinHyperPresale />
-        </ConnectKitButton>
+        </ConnectKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
 }
 
 export default App;
-

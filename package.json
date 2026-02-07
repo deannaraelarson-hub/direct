@@ -22,4 +22,10 @@
     "typescript": "^5.9.3",
     "vite": "^5.0.0"
   }
+  "dependencies": {
+  "connectkit": "^1.6.0",
+  "wagmi": "^2.4.0",
+  "viem": "^2.9.0"
 }
+}
+

@@ -5,11 +5,10 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "wagmi": "^2.4.0",
-    "viem": "^2.7.0",
-    "connectkit": "^1.6.0",
-    "@tanstack/react-query": "^5.12.0",
-    "ethers": "^6.9.0"
+    "@tanstack/react-query": "^4.29.0",
+    "wagmi": "^1.4.0",
+    "viem": "^1.16.0",
+    "connectkit": "^1.4.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -18,7 +17,7 @@
     "eject": "react-scripts eject"
   },
   "devDependencies": {
-    "react-scripts": "5.0.1"
+    "react-scripts": "^5.0.1"
   },
   "browserslist": {
     "production": [
@@ -31,5 +30,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "eslintConfig": {
+    "extends": ["react-app"]
   }
 }

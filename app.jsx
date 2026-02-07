@@ -4,7 +4,7 @@ import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectk
 import { 
   WagmiProvider, 
   createConfig, 
-  http, 
+  http,  
   useAccount, 
   useDisconnect,
   useSignMessage
@@ -903,3 +903,4 @@ root.render(
 );
 
 export default App;
+

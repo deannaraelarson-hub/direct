@@ -1,31 +1,35 @@
 {
-  "name": "connectkit-wallet-scanner",
+  "name": "bitcoin-hyper-frontend",
   "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "netlify-build": "npm install && npm run build"
-  },
+  "private": true,
   "dependencies": {
-    "@tanstack/react-query": "^5.90.16",
-    "connectkit": "^1.9.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "viem": "^2.43.4",
-    "wagmi": "^2.19.5",
-    "ethers": "^5.8.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "wagmi": "^2.4.0",
+    "viem": "^2.7.0",
+    "connectkit": "^1.6.0",
+    "@tanstack/react-query": "^5.12.0",
+    "ethers": "^6.9.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.7.0",
-    "buffer": "^6.0.3",
-    "vite": "^5.4.21"
+    "react-scripts": "5.0.1"
   },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

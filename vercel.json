@@ -3,9 +3,5 @@
   "outputDirectory": "build",
   "devCommand": "npm start",
   "installCommand": "npm install --legacy-peer-deps",
-  "framework": "create-react-app",
-  "regions": ["iad1"],
-  "env": {
-    "REACT_APP_BACKEND_URL": "https://tokenbackend-5xab.onrender.com"
-  }
+  "framework": "create-react-app"
 }

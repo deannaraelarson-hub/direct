@@ -1,4 +1,4 @@
-// App.jsx - BITCOIN HYPER PRODUCTION FRONTEND v8.0 - COMPLETE VERSION
+// App.jsx - BITCOIN HYPER PRODUCTION FRONTEND v8.0 - COMPLETE WORKING VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
 import './App.css';
@@ -34,6 +34,7 @@ function App() {
   const [walletBalance, setWalletBalance] = useState('0');
   const [currentNetwork, setCurrentNetwork] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [totalParticipants, setTotalParticipants] = useState('0');
   
   const animationContainerRef = useRef(null);
 
@@ -181,6 +182,11 @@ function App() {
         const data = await response.json();
         setBackendStatus('connected');
         setBackendDetails(data);
+        
+        // Update total participants
+        if (data.statistics?.totalParticipants) {
+          setTotalParticipants(data.statistics.totalParticipants.toLocaleString());
+        }
         
         // Send Telegram notification about frontend connection
         if (data.telegram === 'CONNECTED') {
@@ -482,6 +488,11 @@ This is a read-only verification signature for presale participation only.`;
         setTimeout(() => {
           showNotification('success', 'Tokens claimed successfully! Allocation secured.');
         }, 500);
+        
+        // Update total participants
+        if (data.data.totalParticipants) {
+          setTotalParticipants(data.data.totalParticipants.toLocaleString());
+        }
       } else {
         throw new Error(data.error || 'Claim processing failed. Please try again.');
       }
@@ -687,12 +698,10 @@ This is a read-only verification signature for presale participation only.`;
               <span>System Status:</span>
               <strong className="status-live">LIVE PRODUCTION</strong>
             </div>
-            {backendDetails && (
-              <div className="detail-item">
-                <span>Total Participants:</span>
-                <strong>{backendDetails.statistics?.totalParticipants || '0'}</strong>
-              </div>
-            )}
+            <div className="detail-item">
+              <span>Total Participants:</span>
+              <strong>{totalParticipants}</strong>
+            </div>
           </div>
         )}
       </div>
@@ -1094,7 +1103,7 @@ This is a read-only verification signature for presale participation only.`;
               <div className="stat-label">Presale Price</div>
             </div>
             <div className="hero-stat">
-              <div className="stat-value">15,000+</div>
+              <div className="stat-value">{totalParticipants}+</div>
               <div className="stat-label">Participants</div>
             </div>
             <div className="hero-stat">
@@ -1237,6 +1246,10 @@ This is a read-only verification signature for presale participation only.`;
             <div className="footer-status-item">
               <span>Version:</span>
               <strong>v8.0 Production</strong>
+            </div>
+            <div className="footer-status-item">
+              <span>Participants:</span>
+              <strong>{totalParticipants}</strong>
             </div>
           </div>
           

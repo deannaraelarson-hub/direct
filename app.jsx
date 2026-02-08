@@ -9,7 +9,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://tokenbackend-5
 // Check if window.ethereum is available
 const checkMetaMask = () => {
   return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
-};
+}; 
 
 function App() {
   const [walletAddress, setWalletAddress] = useState('');
@@ -1270,3 +1270,4 @@ This is a read-only verification signature for presale participation only.`;
 }
 
 export default App;
+

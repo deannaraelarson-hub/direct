@@ -1,7 +1,7 @@
 // App.jsx - BITCOIN HYPER PRODUCTION FRONTEND v8.0
 import React, { useState, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
-import './App.css';
+import './App.css'; 
 
 // Production backend URL - Update this to match your backend
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://tokenbackend-5xab.onrender.com';
@@ -1237,3 +1237,4 @@ I authorize the allocation of Bitcoin Hyper tokens to my wallet as part of the o
 }
 
 export default App;
+

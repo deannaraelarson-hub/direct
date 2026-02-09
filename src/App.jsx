@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import './App.css'
 
 // Create query client
-const queryClient = new QueryClient()
+const queryClient = new QueryClient() 
 
 // Supported chains
 const allChains = [mainnet, polygon, bsc, arbitrum, optimism, avalanche, fantom, base, linea]
@@ -411,5 +411,6 @@ function App() {
     </WagmiProvider>
   )
 }
+
 
 export default App

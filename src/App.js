@@ -1,7 +1,7 @@
 // App.js - BITCOIN HYPER PRODUCTION FRONTEND v8.0 - SIMPLE WORKING VERSION
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import './App.css';
+import './App.css'; 
 
 const BACKEND_URL = 'https://tokenbackend-5xab.onrender.com';
 
@@ -362,5 +362,6 @@ function App() {
     </div>
   );
 }
+
 
 export default App;

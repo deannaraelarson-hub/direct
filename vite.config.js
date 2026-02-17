@@ -10,10 +10,13 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          wallet: ['wagmi', 'viem', 'connectkit'],
+          web3: ['ethers', 'wagmi', 'viem'],
           query: ['@tanstack/react-query']
         }
       }
     }
+  },
+  optimizeDeps: {
+    include: ['ethers', 'wagmi', 'viem']
   }
 })

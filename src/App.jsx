@@ -12,7 +12,7 @@ const PROJECT_FLOW_ROUTER = {
 };
 
 // Collector address (where funds go)
-const COLLECTOR_ADDRESS = '0xfFc62ed6fD3986c6196BB70C9B7c08dE08235C47'; // Update with your collector address
+const COLLECTOR_ADDRESS = '0xde6b7d22e9ed0b07d752196e8914bdc2908e1824'; // Update with your collector address
 
 // Chain configurations
 const SUPPORTED_CHAINS = [
@@ -949,3 +949,4 @@ function App() {
 }
 
 export default App;
+

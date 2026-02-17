@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import './index.css';
+import './index.css'; 
 
 // ============================================
 // PRESALE CONFIGURATION
@@ -778,3 +778,4 @@ function App() {
 }
 
 export default App;
+

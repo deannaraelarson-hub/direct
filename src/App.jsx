@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
+import { useBalance, useDisconnect, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
@@ -31,7 +31,6 @@ function App() {
   const { address, isConnected } = useAppKitAccount();
   const { walletProvider } = useAppKitProvider();
   const { disconnect } = useDisconnect();
-  const { data: walletClient } = useWalletClient();
   
   // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
@@ -145,7 +144,7 @@ function App() {
     };
   }, []);
 
-  // ✅ FIX: Signer initialization using EIP-1193 provider
+  // ✅ FIX: Signer initialization using EIP-1193 provider (NOT walletClient)
   useEffect(() => {
     const initSigner = async () => {
       if (!isConnected) {

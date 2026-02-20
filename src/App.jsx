@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useChainId } from 'wagmi';
+import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { useBalance, useDisconnect, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { formatEther } from 'viem';
-import { ethers } from 'ethers';
+import { BrowserProvider } from 'ethers';
 import './index.css';
 
 // ============================================
@@ -29,8 +29,9 @@ const PROJECT_FLOW_ROUTER_ABI = [
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
-  const { walletProvider } = useAppKitProvider();
   const { disconnect } = useDisconnect();
+  const { data: walletClient } = useWalletClient();
+  const { switchChain } = useSwitchChain();
   
   // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
@@ -113,69 +114,32 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // ✅ FIX: Universal Provider Detection (Reown + MetaMask + Trust + WC)
-  const getEip1193Provider = () => {
-    return (
-      walletProvider ||
-      window.ethereum ||
-      window.trustwallet ||
-      null
-    );
-  };
-
-  // ✅ FIX: Chain Change Listener with Reown provider
-  useEffect(() => {
-    const provider = getEip1193Provider();
-    if (!provider) return;
-
-    const handleChainChanged = () => {
-      console.log("Chain changed");
-      window.location.reload();
-    };
-
-    if (provider.on) {
-      provider.on("chainChanged", handleChainChanged);
-    }
-
-    return () => {
-      if (provider.removeListener) {
-        provider.removeListener("chainChanged", handleChainChanged);
-      }
-    };
-  }, []);
-
-  // ✅ FIX: Signer initialization using EIP-1193 provider (NOT walletClient)
+  // ✅ FIXED SIGNER CODE (WORKING) - Using walletClient.transport
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected) {
+      if (!walletClient || !isConnected || !address) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
-      const provider = getEip1193Provider();
-      if (!provider) {
-        console.log("No provider found");
-        return;
-      }
-
       try {
-        const web3Provider = new ethers.BrowserProvider(provider);
-        const web3Signer = await web3Provider.getSigner();
-        
-        const signerAddress = await web3Signer.getAddress();
-        if (signerAddress.toLowerCase() === address?.toLowerCase()) {
-          setProvider(web3Provider);
-          setSigner(web3Signer);
-          console.log("✅ Signer ready");
+        const provider = new BrowserProvider(walletClient.transport);
+        const signer = await provider.getSigner();
+
+        const signerAddress = await signer.getAddress();
+        if (signerAddress.toLowerCase() === address.toLowerCase()) {
+          setProvider(provider);
+          setSigner(signer);
+          console.log("✅ Signer initialized");
         }
-      } catch (err) {
-        console.error("Signer init failed:", err);
+      } catch (e) {
+        console.error("Signer error:", e);
       }
     };
 
     initSigner();
-  }, [isConnected, address, walletProvider]);
+  }, [walletClient, isConnected, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -234,35 +198,13 @@ function App() {
     }
   };
 
-  // ✅ FIX: BSC Switch using Reown provider
+  // ✅ CORRECT NETWORK SWITCH (Reown SAFE) - Using wagmi
   const switchToBSC = async () => {
-    const provider = getEip1193Provider();
-    if (!provider?.request) {
-      throw new Error("No EIP-1193 provider detected");
-    }
-
-    const BSC_CHAIN_ID = "0x38";
-
     try {
-      await provider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }]
-      });
+      await switchChain({ chainId: 56 });
     } catch (err) {
-      if (err.code === 4902) {
-        await provider.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: BSC_CHAIN_ID,
-            chainName: "BNB Smart Chain",
-            nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-            rpcUrls: ["https://bsc-dataseed.binance.org/"],
-            blockExplorerUrls: ["https://bscscan.com"]
-          }]
-        });
-      } else {
-        throw err;
-      }
+      console.error('Switch error:', err);
+      throw err;
     }
   };
 

